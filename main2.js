@@ -19,7 +19,7 @@ let CRM_DATA = [];
 async function fetchLeads(from, to) {
   document.querySelector(".loading").classList.add("active");
   let token =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJQYXlMb2FkRGF0YSI6ImQ2NTY0OWFmLTQyMjYtNDE0OC1hNzg4LTIyNGJmMjE1MTUxMSIsImV4cCI6MTc2MDQ4OTI4MywiaXNzIjoiTUlTQSIsImF1ZCI6IkFNSVNDUk0yIn0.oFVHrG1sxhGck7rwTMRGhM0oOTAstgLDD8w1UhnughI";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJQYXlMb2FkRGF0YSI6ImY5YzI5Y2JhLWQ5OWMtNDZjZi05MTBkLThiN2M4YmJiOWE5NSIsImV4cCI6MTc2MDUwOTE3MSwiaXNzIjoiTUlTQSIsImF1ZCI6IkFNSVNDUk0yIn0.uByJW-Og95sInr6b1_oNTE_UdOu7vLl10u50QG6d9CI";
 
   while (true) {
     const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
@@ -245,14 +245,15 @@ async function main() {
   setupTimeDropdown();
   setupAccountFilter();
   setupClearFilter();
-  setupQualityFilter();
 
   // ✅ Lần đầu vẽ chart
   renderLeadTrendChart(GROUPED);
   renderToplist(GROUPED);
   renderCampaignPieChart(GROUPED);
   renderLeadTable(RAW_DATA);
-
+  setupQualityFilter();
+  renderSaleFilter(GROUPED);
+  setupLeadSearch();
   renderTagFrequency(GROUPED);
 
   renderLeadQualityMeter(GROUPED);
@@ -261,7 +262,39 @@ async function main() {
 }
 
 main();
+document.addEventListener("DOMContentLoaded", () => {
+  const menuItems = document.querySelectorAll(".dom_menu li");
+  const container = document.querySelector(".dom_container");
 
+  menuItems.forEach((li) => {
+    li.addEventListener("click", () => {
+      // 🟡 Bỏ active cũ
+      menuItems.forEach((item) => item.classList.remove("active"));
+
+      // 🟢 Active cái được chọn
+      li.classList.add("active");
+
+      // 🧹 Xóa tất cả class view cũ trong container
+      container.classList.forEach((cls) => {
+        // chỉ xóa nếu nó trùng với data-view của menu
+        if (["dashboard", "sale", "da", "won"].includes(cls)) {
+          container.classList.remove(cls);
+        }
+      });
+
+      // 🚀 Thêm class mới tương ứng (theo data-view)
+      const view = li.getAttribute("data-view");
+      container.classList.add(view);
+    });
+  });
+});
+
+function renderSaleFilter(grouped) {
+  setupSaleQualityDropdown(grouped);
+  setupLeadTagChartBySale(grouped);
+  renderToplistBySale(grouped);
+  renderLeadSaleChart(grouped, "Needed");
+}
 // ============================
 // RENDER FILTERS
 // ============================
@@ -334,33 +367,66 @@ function renderFilterOptions() {
   }
 }
 function setupQualityFilter() {
-  const qualityList = document.querySelector(
-    ".dom_select.quality ul.dom_select_show"
-  );
-  const selectedEl = document.querySelector(
-    ".dom_select.quality .dom_selected"
-  );
+  const qualitySelect = document.querySelector(".dom_select.quality");
+  if (!qualitySelect) return;
 
-  qualityList.querySelectorAll("li").forEach((li) => {
-    li.onclick = () => {
+  const toggle = qualitySelect.querySelector(".flex");
+  const list = qualitySelect.querySelector("ul.dom_select_show");
+  const selectedEl = qualitySelect.querySelector(".dom_selected");
+  const allItems = list.querySelectorAll("li");
+
+  // 🟡 Toggle mở/đóng dropdown (click bất kỳ trong vùng .dom_select)
+  qualitySelect.onclick = (e) => {
+    e.stopPropagation();
+    const isActive = list.classList.contains("active");
+
+    // Đóng các dropdown khác
+    document
+      .querySelectorAll(".dom_select_show")
+      .forEach((ul) => ul !== list && ul.classList.remove("active"));
+
+    // Toggle dropdown hiện tại
+    list.classList.toggle("active", !isActive);
+  };
+
+  // 🟢 Chọn tag
+  allItems.forEach((li) => {
+    li.onclick = (e) => {
+      e.stopPropagation();
       const tag = li.querySelector("span:nth-child(2)").textContent.trim();
 
-      // Active UI
-      qualityList
-        .querySelectorAll("li")
-        .forEach((el) => el.classList.remove("active"));
-      qualityList
+      const isCurrentlyActive = li.classList.contains("active");
+
+      // Nếu click lại chính item đang active → chỉ đóng dropdown
+      if (isCurrentlyActive) {
+        list.classList.remove("active");
+        return;
+      }
+
+      // Reset UI active
+      allItems.forEach((el) => el.classList.remove("active"));
+      list
         .querySelectorAll(".radio_box")
         .forEach((r) => r.classList.remove("active"));
+
+      // Đánh dấu item được chọn
       li.classList.add("active");
       li.querySelector(".radio_box").classList.add("active");
 
-      // Update label
+      // Cập nhật nhãn hiển thị
       selectedEl.textContent = tag;
 
-      // ✅ Cập nhật chart (giữ nguyên data hiện tại)
+      // Cập nhật chart (giữ nguyên grouped data hiện tại)
       renderLeadTrendChart(GROUPED, tag);
+
+      // Đóng dropdown sau khi chọn
+      list.classList.remove("active");
     };
+  });
+
+  // 🔹 Click ra ngoài thì đóng dropdown
+  document.addEventListener("click", (e) => {
+    if (!qualitySelect.contains(e.target)) list.classList.remove("active");
   });
 }
 
@@ -513,10 +579,12 @@ function applyFilter(type, value) {
   renderFilterOptions();
   renderLeadTrendChart(GROUPED);
   renderToplist(GROUPED);
+  renderToplistBySale(GROUPED);
   renderLeadQualityMeter(GROUPED);
   renderCampaignPieChart(GROUPED);
   renderLeadTable(filtered);
   renderTagFrequency(GROUPED);
+  renderSaleFilter(GROUPED);
 
   // 4️⃣ Log kết quả / render bảng nếu cần
   console.log("✅ Filtered & regrouped data:", GROUPED);
@@ -525,6 +593,241 @@ function applyFilter(type, value) {
 // ============================
 // FILTER DATA LOGIC
 // ============================
+function setupLeadSearch() {
+  const input = document.querySelector(".dom_search");
+  const btn = document.getElementById("find_data");
+
+  if (!input || !btn) return;
+
+  btn.onclick = () => applyLeadSearch();
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") applyLeadSearch();
+  });
+
+  function applyLeadSearch() {
+    const keyword = input.value.trim().toLowerCase();
+    if (!keyword) {
+      // ❌ Nếu trống → render lại toàn bộ
+      renderLeadTable(RAW_DATA);
+      return;
+    }
+
+    // ✅ Lọc theo số điện thoại hoặc tên sale
+    const filtered = RAW_DATA.filter((lead) => {
+      const phone = lead.Mobile?.toLowerCase() || "";
+      const owner = lead.OwnerIDText?.toLowerCase() || "";
+      return phone.includes(keyword) || owner.includes(keyword);
+    });
+
+    // 🧮 Render lại bảng với dữ liệu lọc
+    renderLeadTable(filtered);
+
+    // Nếu không có kết quả thì báo
+    if (filtered.length === 0) {
+      const container = document.querySelector(".dom_table_box");
+      if (container)
+        container.innerHTML = `
+            <div class="dom_table_container empty">
+              <p>Không tìm thấy dữ liệu phù hợp cho "<b>${keyword}</b>"</p>
+            </div>
+          `;
+    }
+  }
+}
+
+function setupLeadTagChartBySale(grouped) {
+  const selectWrap = document.querySelector(".dom_select.sale_tag_chart");
+  const dropdown = selectWrap.querySelector(".dom_select_show");
+  const selected = selectWrap.querySelector(".dom_selected");
+  const searchInput = document.querySelector(".dom_search");
+
+  if (!grouped?.byOwner) return;
+
+  // 🧮 Danh sách sale (ẩn mã NV)
+  const sales = Object.keys(grouped.byOwner).map((n) =>
+    n.replace(/\s*\(NV.*?\)/gi, "").trim()
+  );
+
+  // 🟢 Mặc định: sale đầu tiên
+  const defaultSale = sales[0];
+
+  // 🧹 Render danh sách sale
+  dropdown.innerHTML = sales
+    .map(
+      (s) => `
+          <li class="${s === defaultSale ? "active" : ""}">
+            <span class="radio_box ${s === defaultSale ? "active" : ""}"></span>
+            <span>${s}</span>
+          </li>
+        `
+    )
+    .join("");
+
+  // ✅ Hiển thị mặc định
+  selected.textContent = defaultSale;
+  renderLeadTagChartBySale(grouped, defaultSale);
+
+  // 🟡 Toggle dropdown
+  const toggle = selectWrap.querySelector(".flex");
+  toggle.onclick = (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle("active");
+  };
+
+  // 🟢 Chọn sale khác
+  dropdown.querySelectorAll("li").forEach((li) => {
+    li.onclick = (e) => {
+      e.stopPropagation();
+
+      dropdown
+        .querySelectorAll("li")
+        .forEach((el) => el.classList.remove("active"));
+      dropdown
+        .querySelectorAll(".radio_box")
+        .forEach((r) => r.classList.remove("active"));
+
+      li.classList.add("active");
+      li.querySelector(".radio_box").classList.add("active");
+
+      const saleName = li.querySelector("span:nth-child(2)").textContent.trim();
+      selected.textContent = saleName;
+
+      // ✅ Cập nhật biểu đồ
+      renderLeadTagChartBySale(grouped, saleName);
+
+      // ✅ Gán tên sale vào ô input
+      if (searchInput) {
+        searchInput.value = saleName;
+      }
+
+      // ✅ Lọc dữ liệu theo tên sale và render lại bảng
+      const filtered = RAW_DATA.filter((lead) => {
+        const owner = lead.OwnerIDText?.toLowerCase() || "";
+        return owner.includes(saleName.toLowerCase());
+      });
+      renderLeadTable(filtered);
+
+      dropdown.classList.remove("active");
+    };
+  });
+
+  // 🔹 Click ngoài để đóng
+  document.addEventListener("click", (e) => {
+    if (!selectWrap.contains(e.target)) dropdown.classList.remove("active");
+  });
+}
+
+function renderLeadTagChartBySale(grouped, saleName) {
+  const ctx = document.getElementById("leadTagChartbySale");
+  if (!ctx || !grouped?.byOwner) return;
+
+  // 🔍 Tìm đúng sale
+  const matchedKey = Object.keys(grouped.byOwner).find(
+    (key) => key.replace(/\s*\(NV.*?\)/gi, "").trim() === saleName
+  );
+  const ownerData = grouped.byOwner[matchedKey];
+  if (!ownerData) return;
+
+  // 🧮 Lấy tag & số lượng
+  const labels = Object.keys(ownerData.tags || {});
+  const values = labels.map((t) => ownerData.tags[t].count || 0);
+
+  // 🎨 Màu RGB (không alpha)
+  const barColors = labels.map((tag) => {
+    switch (tag) {
+      case "Needed":
+        return "rgb(255, 171, 0)";
+      case "Considering":
+        return "rgb(0, 177, 72)";
+      case "Bad timing":
+        return "rgb(108, 92, 231)";
+      case "Unqualified":
+        return "rgb(225, 112, 85)";
+      case "Junk":
+        return "rgb(38, 42, 83)";
+      default:
+        return "rgb(200, 200, 200)";
+    }
+  });
+
+  // 🔄 Nếu chart đã có → update
+  if (window.leadTagChartBySaleInstance) {
+    const chart = window.leadTagChartBySaleInstance;
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.data.datasets[0].backgroundColor = barColors;
+    chart.data.datasets[0].label = `Leads by Tag (${saleName})`;
+    chart.update("active");
+    return;
+  }
+
+  // 🚀 Nếu chưa có → tạo mới
+  window.leadTagChartBySaleInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: `Leads by Tag (${saleName})`,
+          data: values,
+          backgroundColor: barColors,
+          borderWidth: 1,
+          borderRadius: 6,
+          // 👇 chỉnh kích thước & khoảng cách cột
+          barPercentage: 1,
+          categoryPercentage: 0.5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 900,
+        easing: "easeOutQuart",
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
+          },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: { weight: "bold", size: 12 },
+          formatter: (v) => (v > 0 ? v : ""),
+          animation: { duration: 500, easing: "easeOutBack" },
+        },
+      },
+      scales: {
+        x: {
+          grid: {
+            display: true,
+            color: "rgb(240, 240, 240)",
+            drawTicks: false,
+            drawBorder: false,
+          },
+          ticks: { font: { size: 12 }, color: "rgb(85, 85, 85)" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 11 },
+            color: "rgb(102, 102, 102)",
+            stepSize: Math.ceil(Math.max(...values) / 4) || 1,
+            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
+          },
+          afterDataLimits: (scale) => (scale.max *= 1.1),
+          grid: { color: "rgb(240, 240, 240)" },
+        },
+      },
+    },
+    plugins: [ChartDataLabels],
+  });
+}
+
 function filterLeadsBySelection(data) {
   return data.filter((lead) => {
     const campaign = lead.CustomField13Text || "Unknown Campaign";
@@ -578,51 +881,66 @@ function setupClearFilter() {
   if (!clearBtn) return;
 
   clearBtn.onclick = () => {
-    console.log("❌ Reset filter: show all");
-
     // 🔄 Reset biến filter
     currentFilter.campaign = null;
     currentFilter.source = null;
     currentFilter.medium = null;
 
-    // --- Chỉ chọn trong vùng .dom_filter (an toàn, tránh đụng quality)
+    // 🧹 Chỉ reset các dropdown trong .dom_filter (campaign/source/medium)
     const filterArea = document.querySelector(".dom_filter");
-    if (!filterArea) return;
+    if (filterArea) {
+      ["campaign", "source", "medium"].forEach((cls) => {
+        const select = filterArea.querySelector(`.dom_select.${cls}`);
+        if (!select) return;
 
-    // 🧹 Reset nội dung hiển thị của từng dropdown
-    ["campaign", "source", "medium"].forEach((cls) => {
-      const select = filterArea.querySelector(`.dom_select.${cls}`);
-      if (!select) return;
+        const selected = select.querySelector(".dom_selected");
+        if (selected) {
+          if (cls === "campaign") selected.textContent = "All campaign";
+          if (cls === "source") selected.textContent = "All Source";
+          if (cls === "medium") selected.textContent = "All Medium";
+        }
 
-      const selected = select.querySelector(".dom_selected");
-      if (selected) {
-        if (cls === "campaign") selected.textContent = "All campaign";
-        if (cls === "source") selected.textContent = "All Source";
-        if (cls === "medium") selected.textContent = "All Medium";
-      }
+        // Gỡ class active
+        select
+          .querySelectorAll("li.active")
+          .forEach((li) => li.classList.remove("active"));
+        select
+          .querySelectorAll(".radio_box.active")
+          .forEach((r) => r.classList.remove("active"));
+      });
+    }
 
-      // Xóa active trong danh sách chọn của dropdown đó
-      select
-        .querySelectorAll("li.active")
-        .forEach((li) => li.classList.remove("active"));
-      select
-        .querySelectorAll(".radio_box.active")
-        .forEach((r) => r.classList.remove("active"));
-    });
+    // ✅ Giữ nguyên account hiện tại
+    const currentAccount =
+      localStorage.getItem("selectedAccount") || "Total Data";
+    let filteredData = RAW_DATA;
 
-    // ✅ Reset lại toàn bộ dữ liệu process
-    GROUPED = processCRMData(RAW_DATA);
+    if (currentAccount === "VTCI") {
+      filteredData = RAW_DATA.filter(
+        (l) => l.CustomField16Text?.trim().toUpperCase() == "VTCI"
+      );
+    } else if (currentAccount === "IDEAS") {
+      filteredData = RAW_DATA.filter(
+        (l) => l.CustomField16Text?.trim().toUpperCase() == "IDEAS"
+      );
+    }
+    console.log(currentAccount);
+
+    // ✅ Process lại
+    GROUPED = processCRMData(filteredData);
     window.grouped = GROUPED;
 
-    // ✅ Re-render filter options & chart & counter
+    // ✅ Re-render toàn bộ dashboard (theo account hiện tại)
     renderFilterOptions();
     renderLeadTrendChart(GROUPED, currentTagFilter);
     updateLeadCounters(GROUPED, currentTagFilter);
     renderToplist(GROUPED);
     renderCampaignPieChart(GROUPED);
     renderTagFrequency(GROUPED);
-
     renderLeadQualityMeter(GROUPED);
+    renderLeadTable(filteredData);
+    renderSaleFilter(GROUPED);
+    setActiveAccountUI(currentAccount);
   };
 }
 
@@ -713,6 +1031,43 @@ function setActiveAccountUI(accountName) {
   avatar.src = acc.img;
   name.textContent = accountName;
   id.textContent = acc.id;
+
+  // Ẩn account đang chọn khỏi danh sách
+  document.querySelectorAll(".dom_account_view ul li").forEach((li) => {
+    const liName = li.querySelector("p span:first-child")?.textContent.trim();
+    if (liName === accountName) {
+      li.style.display = "none";
+    } else {
+      li.style.display = "";
+    }
+  });
+}
+
+function clearAllDropdownFilters() {
+  console.log("🧹 Reset filter dropdown (campaign/source/medium)");
+
+  currentFilter.campaign = null;
+  currentFilter.source = null;
+  currentFilter.medium = null;
+
+  const filterArea = document.querySelector(".dom_filter");
+  if (!filterArea) return;
+
+  ["campaign", "source", "medium"].forEach((cls) => {
+    const select = filterArea.querySelector(`.dom_select.${cls}`);
+    if (!select) return;
+
+    const selected = select.querySelector(".dom_selected");
+    if (selected) {
+      if (cls === "campaign") selected.textContent = "All campaign";
+      if (cls === "source") selected.textContent = "All Source";
+      if (cls === "medium") selected.textContent = "All Medium";
+    }
+
+    select
+      .querySelectorAll("li.active, .radio_box.active")
+      .forEach((el) => el.classList.remove("active"));
+  });
 }
 
 function setupAccountFilter() {
@@ -741,11 +1096,15 @@ function setupAccountFilter() {
       e.stopPropagation();
       const account = li.querySelector("p span:first-child").textContent.trim();
 
+      // Lưu & set UI
       localStorage.setItem("selectedAccount", account);
       setActiveAccountUI(account);
       list.classList.remove("active");
 
-      // 🔹 Lọc lại dữ liệu hiện có
+      // ✅ Clear toàn bộ campaign/source/medium filter
+      clearAllDropdownFilters();
+
+      // 🔹 Lọc dữ liệu theo account
       let filtered = RAW_DATA;
       if (account === "VTCI") {
         filtered = RAW_DATA.filter(
@@ -757,10 +1116,11 @@ function setupAccountFilter() {
         );
       }
 
+      // 🔹 Process lại và render lại toàn bộ dashboard
       GROUPED = processCRMData(filtered);
       window.grouped = GROUPED;
-
       renderAllDashboard(filtered, GROUPED);
+      renderSaleFilter(GROUPED);
     };
   });
 
@@ -913,7 +1273,7 @@ function renderLeadTagChart(grouped) {
 
   const labels = Object.keys(grouped.byTag);
   const values = labels.map((tag) => grouped.byTag[tag].length);
-  const barColors = labels.map(() => "rgba(255, 171, 0, 0.8)");
+  const barColors = labels.map(() => "rgba(255, 161, 0, 0.8)");
 
   // Nếu chart đã tồn tại → chỉ update data
   if (window.leadTagChartInstance) {
@@ -934,7 +1294,7 @@ function renderLeadTagChart(grouped) {
           label: "Leads by Tag",
           data: values,
           backgroundColor: barColors,
-          borderColor: barColors.map((c) => c.replace("0.8", "1")),
+          borderColor: barColors,
           borderWidth: 1,
           borderRadius: 6,
         },
@@ -957,7 +1317,6 @@ function renderLeadTagChart(grouped) {
         datalabels: {
           anchor: "end",
           align: "end",
-          color: "#003366",
           font: {
             weight: "bold",
             size: 12,
@@ -1036,19 +1395,90 @@ function renderToplist(grouped) {
   // 🚀 Render lại danh sách
   for (const item of list) {
     // 🎨 Chọn màu theo ratio
-    let barColor = "#00b894"; // mặc định xanh
-    if (item.ratio < 20) barColor = "#e17055"; // đỏ
-    else if (item.ratio < 40) barColor = "#ffa900"; // vàng
+    let barColor = "rgb(0, 177, 72)"; // xanh
+    if (item.ratio < 20) barColor = "rgb(225, 112, 85)"; // đỏ
+    else if (item.ratio < 40) barColor = "rgb(255, 169, 0)"; // vàng
+
+    const html = `
+      <li>
+        <p>
+          <span>${item.key}</span>
+          <span>
+            <span>${item.quality}/${item.total}</span>
+            <span 
+              style="color:${barColor};  background:rgba(${barColor
+      .replace("rgb(", "")
+      .replace(")", "")}, 0.1);">
+              ${item.ratio.toFixed(1)}%
+            </span>
+          </span>
+        </p>
+        <p>
+          <span class="progress-bar" 
+            style="
+              width:${item.ratio}%; 
+        background:${barColor};
+            ">
+          </span>
+        </p>
+      </li>
+    `;
+
+    wrap.insertAdjacentHTML("beforeend", html);
+  }
+}
+function renderToplistBySale(grouped) {
+  const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist.sale");
+  if (!wrap || !grouped?.byOwner) return;
+
+  const list = [];
+
+  // 🧮 Duyệt qua từng Sale trong grouped.byOwner
+  for (const [owner, data] of Object.entries(grouped.byOwner)) {
+    const total = data.total || 0;
+    const needed = data.tags?.Needed?.count || 0;
+    const considering = data.tags?.Considering?.count || 0;
+    const quality = needed + considering;
+    const ratio = total > 0 ? (quality / total) * 100 : 0;
+
+    // ✂️ Bỏ phần mã NV trong tên
+    const cleanName = owner.replace(/\s*\(NV.*?\)/gi, "").trim();
+
+    list.push({
+      name: cleanName,
+      total,
+      quality,
+      ratio: +ratio.toFixed(1),
+    });
+  }
+
+  // 🔽 Sắp xếp theo tỷ lệ lead tốt (hoặc tổng lead)
+  list.sort((a, b) => b.ratio - a.ratio || b.total - a.total);
+
+  // 🧹 Xóa nội dung cũ
+  wrap.innerHTML = "";
+
+  // 🚀 Render danh sách
+  for (const item of list) {
+    // 🎨 Màu theo ratio
+    let barColor = "rgb(0, 177, 72)"; // xanh
+    if (item.ratio < 20) barColor = "rgb(225, 112, 85)"; // đỏ
+    else if (item.ratio < 40) barColor = "rgb(255, 169, 0)"; // vàng
 
     const html = `
         <li>
           <p>
-            <span>${item.key}</span>
+            <span>${item.name}</span>
             <span>
               <span>${item.quality}/${item.total}</span>
-              <span style="color:${barColor}" class="${
-      item.ratio >= 40 ? "" : ""
-    }">${item.ratio.toFixed(1)}%</span>
+              <span 
+                style="color:${barColor};
+                background:rgba(${barColor
+                  .replace("rgb(", "")
+                  .replace(")", "")}, 0.1);
+                font-weight:600;">
+                ${item.ratio.toFixed(1)}%
+              </span>
             </span>
           </p>
           <p>
@@ -1058,9 +1488,60 @@ function renderToplist(grouped) {
           </p>
         </li>
       `;
+
     wrap.insertAdjacentHTML("beforeend", html);
   }
 }
+
+function setupSaleQualityDropdown(grouped) {
+  const select = document.querySelector(".dom_select.sale_quality");
+  if (!select) return;
+
+  const selectedLabel = select.querySelector(".dom_selected");
+  const list = select.querySelector(".dom_select_show");
+  const toggle = select.querySelector(".flex");
+
+  // Toggle mở dropdown
+  toggle.onclick = (e) => {
+    e.stopPropagation();
+    document.querySelectorAll(".dom_select_show").forEach((u) => {
+      if (u !== list) u.classList.remove("active");
+    });
+    list.classList.toggle("active");
+  };
+
+  // Click chọn tag
+  list.querySelectorAll("li").forEach((li) => {
+    li.onclick = (e) => {
+      e.stopPropagation();
+      const tag = li.querySelector("span:nth-child(2)").textContent.trim();
+
+      // Active UI
+      list.querySelectorAll("li").forEach((i) => i.classList.remove("active"));
+      li.classList.add("active");
+
+      list
+        .querySelectorAll(".radio_box")
+        .forEach((r) => r.classList.remove("active"));
+      li.querySelector(".radio_box").classList.add("active");
+
+      // Cập nhật label
+      selectedLabel.textContent = tag;
+
+      // Cập nhật chart
+      renderLeadSaleChart(grouped, tag);
+
+      // Đóng dropdown
+      list.classList.remove("active");
+    };
+  });
+
+  // Đóng khi click ra ngoài
+  document.addEventListener("click", (e) => {
+    if (!select.contains(e.target)) list.classList.remove("active");
+  });
+}
+
 function renderCampaignPieChart(grouped) {
   const ctx = document.getElementById("pieCampaign");
   if (!ctx || !grouped?.byCampaign) return;
@@ -1082,8 +1563,8 @@ function renderCampaignPieChart(grouped) {
 
   // 🎨 Bảng màu chính + phụ
   const mainPalette = [
-    "#262a53", // xanh than
     "#ffa900", // vàng
+    "#262a53", // xanh than
     "#cccccc", // xám
     "#e17055", // cam
   ];
@@ -1176,6 +1657,130 @@ function renderCampaignPieChart(grouped) {
     plugins: [ChartDataLabels],
   });
 }
+function renderLeadSaleChart(grouped, tagFilter = "Needed") {
+  if (!grouped?.byOwner) return;
+
+  const ctx = document.getElementById("leadSale");
+  if (!ctx) return;
+
+  // 🧮 Chuẩn bị dữ liệu
+  const labels = [];
+  const totalCounts = [];
+  const tagCounts = [];
+
+  Object.entries(grouped.byOwner).forEach(([owner, ownerData]) => {
+    const total = ownerData.total || 0;
+    const tagCount = ownerData.tags?.[tagFilter]?.count || 0;
+
+    // ✂️ Cắt bỏ phần mã (VD: "Nguyễn Thị Linh Đan (NV0211)" -> "Nguyễn Thị Linh Đan")
+    const cleanName = owner.replace(/\s*\(NV.*?\)/gi, "").trim();
+    labels.push(cleanName);
+
+    totalCounts.push(total);
+    tagCounts.push(tagCount);
+  });
+
+  const ctx2d = ctx.getContext("2d");
+
+  // 🎨 Màu sắc
+  const tagColor = "rgba(38, 42, 83, 0.8)"; // Xanh đậm
+  const totalColor = "rgba(255, 171, 0, 0.8)"; // Vàng
+  // 🔄 Nếu chart đã có sẵn → update animation
+  if (window.leadSaleChartInstance) {
+    const chart = window.leadSaleChartInstance;
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = totalCounts;
+    chart.data.datasets[1].data = tagCounts;
+    chart.data.datasets[1].label = `${tagFilter} Leads`;
+    chart.update();
+    return;
+  }
+  const maxValue = Math.max(...totalCounts, ...tagCounts);
+  const step = Math.ceil(maxValue / 5); // ⚙️ chia trục Y thành khoảng 5 đoạn
+  // 🚀 Tạo chart mới
+  window.leadSaleChartInstance = new Chart(ctx2d, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Total Leads",
+          data: totalCounts,
+          backgroundColor: totalColor,
+          borderColor: totalColor.replace("0.8", "1"),
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+        {
+          label: `${tagFilter} Leads`,
+          data: tagCounts,
+          backgroundColor: tagColor,
+          borderColor: tagColor.replace("0.8", "1"),
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index" },
+      plugins: {
+        legend: { position: "top", align: "end" },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = totalCounts[ctx.dataIndex] || 0;
+              const count = ctx.parsed.y || 0;
+              const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+              return `${
+                ctx.dataset.label
+              }: ${count.toLocaleString()} leads (${pct}%)`;
+            },
+          },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: {
+            weight: "bold",
+            size: 12,
+          },
+          formatter: (v) => (v > 0 ? v : ""),
+          animation: {
+            duration: 500,
+            easing: "easeOutBack",
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: "rgba(0,0,0,0.05)" },
+          ticks: {
+            color: "#444",
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8, // ⚙️ Giới hạn tối đa số sale hiển thị
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: "rgba(0,0,0,0.05)" },
+          ticks: {
+            color: "#666",
+            stepSize: step,
+          },
+          afterDataLimits: (scale) => {
+            scale.max *= 1.1; // tăng 10%
+          },
+        },
+      },
+    },
+    plugins: [ChartDataLabels],
+  });
+}
+
 function renderLeadTable(leads) {
   const container = document.querySelector(".dom_table_box");
   if (!container) return;
@@ -1255,7 +1860,7 @@ function renderLeadTable(leads) {
             <td><i class="fa-solid fa-phone table_phone"></i> ${
               Mobile || "-"
             }</td>
-            <td>${OwnerIDText || "-"}</td>
+            <td>${OwnerIDText.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
             <td>${tagHtml}</td>
             <td>${CustomField13Text || "-"}</td>
             <td>${CustomField14Text || "-"}</td>
@@ -1384,7 +1989,8 @@ function renderLeadQualityMeter(grouped) {
 
   // --- Update donut (mức độ đầy và màu) ---
   if (donut) donut.style.setProperty("--percentage", percent);
-  if (number) number.textContent = `${percent}%`;
+  if (number)
+    number.innerHTML = `<span>${percent}%</span><span>(${qualityCount})</span>`;
 
   // --- Update labels ---
   if (labelNeeded) labelNeeded.textContent = `${neededPercent}%`;
@@ -1393,14 +1999,14 @@ function renderLeadQualityMeter(grouped) {
   // --- Update dòng tổng số ---
   if (rangeLabel) {
     const [left, right] = rangeLabel.querySelectorAll("p");
-    if (left) left.textContent = `${qualityCount}`; // Needed + Considering
+    if (left) left.textContent = `0`; // Needed + Considering
     if (right) right.textContent = `${totalLeads}`; // Total lead
   }
 
   // --- Màu vòng động theo chất lượng ---
   if (donut) {
     let fillColor = "#ffa900"; // mặc định vàng
-    if (percent >= 40) fillColor = "#00b894"; // xanh lá khi tốt
+    if (percent >= 40) fillColor = "#00b148"; // xanh lá khi tốt
     else if (percent <= 20) fillColor = "#e17055"; // đỏ nếu thấp
     donut.style.setProperty("--fill", fillColor);
   }
