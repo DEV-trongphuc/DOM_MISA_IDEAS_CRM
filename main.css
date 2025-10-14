@@ -84,7 +84,7 @@ html {
 .dom_info {
   padding: 0.8rem 1rem;
   background-color: var(--fadeClr500);
-  border-radius: 10px;
+  border-radius: 8px;
   gap: 1rem;
   display: flex;
   cursor: pointer;
@@ -93,7 +93,7 @@ html {
 .dom_info img {
   width: 4rem;
   height: 4rem;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .dom_info > div {
   display: flex;
@@ -121,7 +121,7 @@ html {
   align-items: center;
   gap: 1rem;
   padding: 1.5rem 2rem;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease-in-out;
 }
@@ -182,7 +182,7 @@ html {
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .dom_header_time i {
   font-size: 1.8rem;
@@ -201,7 +201,7 @@ html {
   gap: 1rem;
   padding: 0 2rem;
   min-width: 20rem;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   position: relative;
   background-color: var(--fadeClr500);
@@ -243,11 +243,10 @@ html {
 
 .dom_toplist > li > p:last-child {
   width: 100%;
-  height: 15px;
+  height: 12px;
   margin-top: 1rem;
   position: relative;
   overflow: hidden;
-  border-radius: 50rem;
 }
 
 .dom_toplist > li > p:first-child > span:last-child {
@@ -258,7 +257,7 @@ html {
 }
 .dom_toplist > li > p:first-child > span:last-child > span:last-child {
   padding: 5px 1rem;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 1.2rem !important;
   margin-left: 1rem;
   background-color: rgba(224, 224, 224, 0.253);
@@ -321,6 +320,16 @@ html {
   color: var(--textClr);
   font-size: 3rem;
 }
+.frequency_number {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+}
+.frequency_number > span:last-child {
+  font-size: 1.3rem;
+}
 .main_bg {
   background-color: rgb(255, 242, 128);
 }
@@ -332,9 +341,7 @@ html {
   position: absolute;
   top: 0;
   left: 0;
-  opacity: 0.8;
-  height: 15px;
-  border-radius: 50rem;
+  height: 12px;
 }
 .chart canvas {
   height: 40rem !important;
@@ -495,7 +502,7 @@ tbody {
   width: 100%;
   top: -9.5rem;
   padding: 2rem;
-  border-radius: 10px;
+  border-radius: 8px;
   position: absolute;
   background-color: white;
   transition: 0.3;
@@ -515,13 +522,13 @@ tbody {
   display: inline-block;
   padding: 5px 1rem;
   width: 5rem;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 1.2rem;
 }
 .custom_date > p > input {
   border: 1px solid var(--mainClr);
   padding: 2px 1rem;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 1.4rem;
   cursor: pointer;
   transition: 0.3s;
@@ -538,7 +545,7 @@ tbody {
   background-color: var(--mainClr);
   text-align: center;
   padding: 1rem;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #fff;
 }
 .dom_select.time.active .custom_date {
@@ -561,12 +568,12 @@ tbody {
   top: calc(100% + 1rem);
   left: 0;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 8px;
   width: 100%;
   display: flex;
   max-height: 60vh;
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
+  border-radius: 8px;
   transition: all 0.3s ease-in-out;
   pointer-events: none;
   z-index: 9;
@@ -617,7 +624,7 @@ tbody {
 .dom_account_view {
   display: flex;
   box-shadow: 0 0 5px var(--shadow02);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #f3f3f3;
   cursor: pointer;
   position: relative;
@@ -626,7 +633,7 @@ tbody {
   width: 100%;
   padding: 1rem;
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .dom_account_view_block ~ ul.active {
   opacity: 1;
@@ -658,7 +665,7 @@ tbody {
 .account_item_avatar {
   width: 35px;
   height: 35px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .account_item_info {
   display: flex;
@@ -689,7 +696,7 @@ tbody {
 .dom_account_view > ul li img {
   width: 35px;
   height: 35px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .dom_account_view > ul li > p {
   display: flex;
@@ -706,7 +713,7 @@ tbody {
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.171);
   max-height: 50vh;
   overflow-y: auto;
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   z-index: 999;
@@ -723,7 +730,7 @@ tbody {
 }
 .dom_inner {
   background-color: white;
-  border-radius: 10px;
+  border-radius: 8px;
   /* min-height: 40rem; */
   display: flex;
   flex-direction: column;
@@ -738,27 +745,29 @@ tbody {
 .dom_inner h2 i {
   padding-right: 1rem;
 }
-#count_lead {
+#count_lead,
+.count_lead {
   display: inline;
   background-color: var(--mainClr);
   font-size: 1.5rem;
   padding: 8px 1rem;
-  border-radius: 10px;
+  border-radius: 8px;
   color: white;
   padding-right: 2rem;
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.15);
 }
 #count_needed {
   display: inline;
-  background-color: white;
+  background-color: var(--subClr);
   font-size: 1.5rem;
   padding: 8px 1rem;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--subClr);
   padding-right: 2rem;
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.15);
   margin-left: 1rem;
-  border: 1px solid var(--subClr);
+  color: white;
+  /* border: 1px solid var(--subClr); */
 }
 .dom_inner.w50 {
   width: 50%;
@@ -785,7 +794,7 @@ tbody {
   background-color: var(--mainClr);
   padding: 1rem;
   cursor: pointer;
-  border-radius: 10px;
+  border-radius: 8px;
   color: white;
   font-weight: bold;
 }
@@ -808,7 +817,7 @@ tbody {
   padding: 8px 1rem;
   border: 1px solid var(--mainClr);
   width: 40rem;
-  border-radius: 10px;
+  border-radius: 8px;
   outline: transparent solid 2px;
   transition: 0.3s;
 }
@@ -825,12 +834,17 @@ tbody {
   align-items: center;
   gap: 1rem;
 }
-#dom_export_data {
+#find_data {
   background-color: var(--mainClr);
   font-weight: bold;
   color: white;
   padding: 1rem 2rem;
-  border-radius: 10px;
+  border-radius: 8px;
+  transition: 0.3s;
+  cursor: pointer;
+}
+#find_data:hover {
+  opacity: 0.8;
 }
 
 .loading {
@@ -866,7 +880,7 @@ tbody {
 }
 .freq_tag_item {
   padding: 8px 1.5rem;
-  border-radius: 5px;
+  border-radius: 50rem;
   border: 1px solid rgb(0, 0, 0, 0.2);
   box-shadow: 0 0 5px rgb(0, 0, 0, 0.1);
   transition: 0.3s;
@@ -878,12 +892,12 @@ tbody {
 
 .freq_tag_item .tag_count {
   background-color: #fff1d4;
-  padding: 1px 5px;
+  padding: 1px 1rem;
   margin-left: 1rem;
   color: var(--textClr);
   font-weight: bold;
   font-size: 1.2rem;
-  border-radius: 5px;
+  border-radius: 50rem;
 }
 .tag_chip {
   display: inline-block;
@@ -972,4 +986,25 @@ tbody {
     background-size: 10px 3px, 10px 3px, 10px 3px, 10px 10px, 10px 30px,
       10px 50px;
   }
+}
+.dom_container > div > .dom_row {
+  display: none;
+}
+.dom_container.dashboard > div.dom_dashboard .dom_row {
+  display: flex;
+}
+.dom_container.sale > div.dom_sale .dom_row {
+  display: flex;
+}
+.dom_container.sale .dom_row.filter {
+  display: flex !important;
+}
+.dom_container.sale .dom_row.table {
+  display: flex !important;
+}
+.dom_container.dashboard .dom_table .dom_row {
+  display: flex;
+}
+.dom_container.sale .dom_table .dom_row {
+  display: flex;
 }
