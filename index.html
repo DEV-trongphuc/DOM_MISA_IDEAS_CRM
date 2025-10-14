@@ -17,6 +17,12 @@
 
     <!-- Plugin hiển thị số trên đầu cột -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <section id="dom" class="flex">
@@ -66,25 +72,26 @@
         </div>
         <p class="dom_text_menu">MAIN MENU</p>
         <ul class="dom_menu">
-          <li class="active">
+          <li class="active" data-view="dashboard">
             <i class="fa-solid fa-chart-column"></i>
             <span>CRM Dashboard</span>
           </li>
-          <li>
-            <i class="fa-solid fa-chart-simple"></i>
-            <span>Data Analytics</span>
-          </li>
-          <li>
+          <li class="" data-view="sale">
             <i class="fa-solid fa-chart-pie"></i>
             <span>Sales Progress</span>
           </li>
-          <li>
+          <li class="" data-view="da">
+            <i class="fa-solid fa-chart-simple"></i>
+            <span>Data Analytics</span>
+          </li>
+
+          <li class="" data-view="won">
             <i class="fa-solid fa-graduation-cap"></i>
             <span>Won Lead</span>
           </li>
         </ul>
       </div>
-      <div class="dom_container">
+      <div class="dom_container dashboard">
         <div class="dom_header flex box_shadow">
           <div class="dom_header_time">
             <div class="dom_select time">
@@ -100,7 +107,7 @@
                 <li data-date="last_week" class="">
                   <span class="radio_box"></span> <span>Last Week</span>
                 </li>
-                <li data-date="this_month" class="">
+                <li data-date="this_month" class="active">
                   <span class="radio_box"></span> <span>This Month</span>
                 </li>
                 <!-- <li data-date="last_month" class="">
@@ -123,7 +130,7 @@
           </div>
         </div>
         <div class="dom_dashboard">
-          <div class="dom_row flex">
+          <div class="dom_row flex filter">
             <div class="dom_inner box_shadow">
               <div class="dom_filter">
                 <div>
@@ -187,6 +194,23 @@
               </div>
             </div>
           </div>
+
+          <div class="dom_row flex">
+            <div class="dom_inner w50 box_shadow chart">
+              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
+              <div class="chart-wrapper">
+                <canvas id="leadTagChart"></canvas>
+              </div>
+            </div>
+            <div class="dom_inner w50 box_shadow chart">
+              <h2>
+                <i class="fa-solid fa-chart-bar main_clr"></i>Source - Qualified
+              </h2>
+              <div class="dom_toplist_wrap">
+                <ul class="dom_toplist"></ul>
+              </div>
+            </div>
+          </div>
           <div class="dom_row flex">
             <div class="dom_inner box_shadow chart">
               <div class="dom_table_filter">
@@ -230,26 +254,9 @@
             </div>
           </div>
           <div class="dom_row flex">
-            <div class="dom_inner w50 box_shadow chart">
-              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
-              <div class="chart-wrapper">
-                <canvas id="leadTagChart"></canvas>
-              </div>
-            </div>
-            <div class="dom_inner w50 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-chart-bar main_clr"></i>Source -
-                %Qualified
-              </h2>
-              <div class="dom_toplist_wrap">
-                <ul class="dom_toplist"></ul>
-              </div>
-            </div>
-          </div>
-          <div class="dom_row flex">
             <div class="dom_inner w25 box_shadow chart">
               <h2>
-                <i class="fa-solid fa-chart-simple main_clr"></i> Marketing
+                <i class="fa-solid fa-bullseye main_clr"></i> Marketing
                 Qualified
               </h2>
               <div class="dom_frequency">
@@ -277,21 +284,130 @@
             </div>
             <div class="dom_inner w33 box_shadow chart">
               <h2>
-                <i class="fa-solid fa-chart-bar main_clr"></i>Campaign Pie
+                <i class="fa-solid fa-chart-pie main_clr"></i> Campaign Pie
               </h2>
               <div class="chart-wrapper">
                 <canvas id="pieCampaign"></canvas>
               </div>
             </div>
             <div class="dom_inner w33 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-chart-bar main_clr"></i>Source -
-                %Qualified
-              </h2>
+              <h2><i class="fa-solid fa-tags main_clr"></i> Frequency tag</h2>
               <div class="frequency_tag"></div>
             </div>
           </div>
+        </div>
+        <div class="dom_sale">
           <div class="dom_row flex">
+            <!-- <div class="dom_inner box_shadow">
+              <div class="dom_filter">
+                <div>
+                  <i class="fa-solid fa-filter"></i>
+                  <p>Sale filter</p>
+                </div>
+                <div class="dom_select sale">
+                  <div class="flex">
+                    <p class="dom_selected">All sale</p>
+                  </div>
+                  <i class="fa-solid fa-angle-down"></i>
+                  <ul class="dom_select_show">
+                    <li data-date="today" class="active">
+                      <span class="radio_box"></span> <span>Today</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Today</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Today</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div> -->
+          </div>
+          <div class="dom_row flex" style="margin-top: 0">
+            <div class="dom_inner box_shadow chart">
+              <div class="dom_table_filter">
+                <h2>
+                  <i class="fa-solid fa-graduation-cap main_clr"></i> Saleperson
+                  Chart
+                </h2>
+                <div class="dom_select sale_quality">
+                  <i class="fa-solid fa-chart-area"></i>
+                  <div class="flex">
+                    <p class="dom_selected">Needed</p>
+                  </div>
+                  <i class="fa-solid fa-angle-down"></i>
+                  <ul class="dom_select_show">
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Considering</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Bad timing</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Unqualified</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Junk</span>
+                    </li>
+                    <li data-date="today" class="active">
+                      <span class="radio_box"></span> <span>Needed</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div style="margin-top: 1.5rem">
+                <canvas id="leadSale"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="dom_row flex">
+            <div class="dom_inner w50 box_shadow chart">
+              <div class="dom_table_filter">
+                <h2>
+                  <i class="fa-solid fa-chart-column main_clr"></i> Quality
+                  Saleperson
+                </h2>
+                <div class="dom_select sale_tag_chart">
+                  <div class="flex">
+                    <p class="dom_selected"></p>
+                  </div>
+                  <i class="fa-solid fa-angle-down"></i>
+                  <ul class="dom_select_show">
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Considering</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Bad timing</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Unqualified</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Junk</span>
+                    </li>
+                    <li data-date="today" class="active">
+                      <span class="radio_box"></span> <span>Needed</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="chart-wrapper">
+                <canvas id="leadTagChartbySale"></canvas>
+              </div>
+            </div>
+            <div class="dom_inner w50 box_shadow chart">
+              <h2>
+                <i class="fa-solid fa-chart-bar main_clr"></i>Top Qualified Lead
+              </h2>
+              <div class="dom_toplist_wrap">
+                <ul class="dom_toplist sale"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dom_table">
+          <div class="dom_row table flex">
             <div class="dom_inner box_shadow table">
               <div class="dom_table_filter">
                 <h2>
@@ -302,7 +418,7 @@
                     class="dom_search"
                     placeholder="Find by Email or Phone number"
                   />
-                  <p id="dom_export_data">Export</p>
+                  <p id="find_data">Filter</p>
                 </div>
               </div>
               <div class="dom_table_box"></div>
