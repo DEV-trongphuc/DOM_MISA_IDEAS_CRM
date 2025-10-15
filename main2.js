@@ -13,53 +13,27 @@ async function fetchLeads(from, to) {
 
   // Nếu chưa có token → hiện popup nhập
   if (!token) {
-    document.querySelector(".dom_accounts").classList.add("active");
-    document.querySelector(".dom_accounts_overlay").classList.add("active");
-
-    // Trả về promise đợi user nhập xong
-    token = await new Promise((resolve) => {
-      const confirmBtn = document.getElementById("view_report");
-
-      const handler = () => {
-        const input = document.getElementById("access_token").value.trim();
-        if (!input) {
-          alert("Token bắt buộc!");
-          return;
-        }
-        localStorage.setItem("misa_token", input);
-        document.querySelector(".dom_accounts").classList.remove("active");
-        document
-          .querySelector(".dom_accounts_overlay")
-          .classList.remove("active");
-        confirmBtn.removeEventListener("click", handler);
-        resolve(input);
-      };
-
-      confirmBtn.addEventListener("click", handler);
-    });
+    token = await promptForToken();
   }
 
-  // ===============================
-  // Tiến hành fetch dữ liệu
-  // ===============================
   const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
 
   try {
     const res = await fetch(url);
     const data = await res.json();
 
-    if (data.error) {
-      alert("Lỗi: " + data.error + ". Nhập token mới.");
+    // ❌ Nếu có lỗi hoặc không có dữ liệu → bắt nhập token lại
+    if (data.error || !data.data || data.data.length === 0) {
+      alert(
+        data.error
+          ? "Lỗi: " + data.error + ". Nhập token mới."
+          : "Không có dữ liệu! Thử token khác."
+      );
       localStorage.removeItem("misa_token");
-      return fetchLeads(from, to); // Gọi lại để hiển popup nhập token mới
+      return fetchLeads(from, to); // Gọi lại để hiển form nhập token
     }
 
-    if (!data.data || data.data.length === 0) {
-      alert("Không có dữ liệu!");
-      document.querySelector(".loading").classList.remove("active");
-      return [];
-    }
-
+    // ✅ Có dữ liệu
     CRM_DATA = data.data;
     document.querySelector(".loading").classList.remove("active");
     return CRM_DATA;
@@ -70,6 +44,33 @@ async function fetchLeads(from, to) {
     document.querySelector(".loading").classList.remove("active");
     return fetchLeads(from, to);
   }
+}
+
+// ====== Hàm hiển form nhập token và đợi user nhập xong ======
+async function promptForToken() {
+  document.querySelector(".dom_accounts").classList.add("active");
+  document.querySelector(".dom_accounts_overlay").classList.add("active");
+
+  return new Promise((resolve) => {
+    const confirmBtn = document.getElementById("view_report");
+
+    const handler = () => {
+      const input = document.getElementById("access_token").value.trim();
+      if (!input) {
+        alert("Token bắt buộc!");
+        return;
+      }
+      localStorage.setItem("misa_token", input);
+      document.querySelector(".dom_accounts").classList.remove("active");
+      document
+        .querySelector(".dom_accounts_overlay")
+        .classList.remove("active");
+      confirmBtn.removeEventListener("click", handler);
+      resolve(input);
+    };
+
+    confirmBtn.addEventListener("click", handler);
+  });
 }
 
 // async function fetchLeads(from, to) {
