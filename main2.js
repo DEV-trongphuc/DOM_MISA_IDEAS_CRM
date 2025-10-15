@@ -6,34 +6,162 @@
 // 📥 Lấy dữ liệu giả lập từ local file
 // ----------------------------------------
 let CRM_DATA = [];
+function waitForOTP() {
+  return new Promise((resolve) => {
+    const confirmBtn = document.getElementById("view_report");
+    const otpInput = document.getElementById("access_token");
 
-async function fetchLeads(from, to) {
-  document.querySelector(".loading").classList.add("active");
-  let token = localStorage.getItem("misa_token");
+    confirmBtn.onclick = () => {
+      const otp = otpInput.value.trim();
+      if (!otp) {
+        alert("Vui lòng nhập OTP!");
+        return;
+      }
+      resolve(otp);
+    };
+  });
+}
+async function loginFlow(username, password) {
+  // ==== Bước 1: Login nhận temp token ====
+  const formData1 = new FormData();
+  formData1.append("Username", username);
+  formData1.append("Password", password);
 
-  // Nếu chưa có token → hiện popup nhập
-  if (!token) {
-    token = await promptForToken();
+  const res1 = await fetch("https://ideas.edu.vn/login_otp.php?step=login", {
+    method: "POST",
+    body: formData1,
+  });
+  const data1 = await res1.json();
+  console.log("Step 1 response:", data1);
+
+  if (!data1.Data?.AccessToken?.Token) {
+    console.error("Không nhận được temp token!");
+    return;
+  }
+  const tempToken = data1.Data.AccessToken.Token;
+  console.log("Temp Token:", tempToken);
+
+  // ==== Bước 2: Chờ người dùng nhập OTP qua UI ====
+  const otp = await waitForOTP();
+
+  const formData2 = new FormData();
+  formData2.append("OTP", otp);
+  formData2.append("Token", tempToken);
+
+  const res2 = await fetch("https://ideas.edu.vn/login_otp.php?step=otp", {
+    method: "POST",
+    body: formData2,
+  });
+  const data2 = await res2.json();
+  console.log("Step 2 response:", data2);
+
+  if (!data2.Success) {
+    console.error("Login thất bại:", data2.UserMessage || data2.SystemMessage);
+    return;
   }
 
-  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+  const accessToken = data2.Data.AccessToken?.Token;
+  console.log("Access Token chính thức:", accessToken);
+
+  // ==== Bước 3: Lấy info user với token chính thức ====
+  const res3 = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
+    method: "POST",
+  });
+  const data3 = await res3.json();
+  console.log("Step 3 response (User Info):", data3);
+
+  const token = data3.Data.token;
+  const refresh_token = data3.Data.refresh_token;
+  localStorage.setItem("misa_token", token);
+  localStorage.setItem("misa_refresh_token", refresh_token);
+
+  return { token, refresh_token };
+}
+async function quickLogin() {
+  try {
+    const response = await fetch(
+      "https://ideas.edu.vn/login_otp.php?step=crm",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // Nếu cần gửi body, có thể thêm ở đây:
+        // body: JSON.stringify({ username: "xxx", password: "xxx" })
+      }
+    );
+
+    const data = await response.json();
+    console.log("Step 3 response (User Info):", data);
+
+    // Lấy token và refresh_token
+    const token = data?.Data?.token;
+    const refresh_token = data?.Data?.refresh_token;
+
+    if (token && refresh_token) {
+      // ✅ Lưu vào localStorage
+      localStorage.setItem("misa_token", token);
+      localStorage.setItem("misa_refresh_token", refresh_token);
+      console.log("✅ Token và Refresh Token đã được lưu vào localStorage");
+    } else {
+      console.warn("⚠️ Không tìm thấy token trong phản hồi:", data);
+    }
+
+    return { token, refresh_token };
+  } catch (error) {
+    console.error("❌ Lỗi khi gọi API quickLogin:", error);
+  }
+}
+
+async function getToken(username, password) {
+  // 1️⃣ Kiểm tra localStorage
+  let token = localStorage.getItem("misa_token");
+  if (token) return token;
+
+  // 2️⃣ Thử quickLogin
+  try {
+    const { token: qToken } = await quickLogin();
+    if (qToken) return qToken;
+  } catch (err) {
+    console.warn("QuickLogin không thành công:", err);
+  }
+
+  // 3️⃣ Nếu vẫn chưa có → gọi loginFlow với OTP
+  try {
+    const { token: lToken } = await loginFlow(username, password);
+    if (lToken) {
+      localStorage.setItem("misa_token", lToken);
+      return lToken;
+    }
+  } catch (err) {
+    console.error("LoginFlow thất bại:", err);
+  }
+
+  // Nếu vẫn không có token → yêu cầu nhập tay
+  token = prompt("Nhập token MISA:");
+  localStorage.setItem("misa_token", token);
+  return token;
+}
+
+async function fetchLeads(from, to, username, password) {
+  document.querySelector(".loading").classList.add("active");
 
   try {
+    const token = await getToken(username, password);
+
+    const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
     const res = await fetch(url);
     const data = await res.json();
 
-    // ❌ Nếu có lỗi hoặc không có dữ liệu → bắt nhập token lại
     if (data.error || !data.data || data.data.length === 0) {
-      alert(
+      console.warn(
+        "Token lỗi hoặc không có dữ liệu, xóa token và thử lại:",
         data.error
-          ? "Lỗi: " + data.error + ". Nhập token mới."
-          : "Không có dữ liệu! Thử token khác."
       );
       localStorage.removeItem("misa_token");
-      return fetchLeads(from, to); // Gọi lại để hiển form nhập token
+      return fetchLeads(from, to, username, password); // Gọi lại
     }
 
-    // ✅ Có dữ liệu
     CRM_DATA = data.data;
     document.querySelector(".loading").classList.remove("active");
     return CRM_DATA;
@@ -42,36 +170,12 @@ async function fetchLeads(from, to) {
     alert("Không lấy được dữ liệu, thử token khác");
     localStorage.removeItem("misa_token");
     document.querySelector(".loading").classList.remove("active");
-    return fetchLeads(from, to);
+    return fetchLeads(from, to, username, password);
   }
 }
 
+// Ví dụ gọi:
 // ====== Hàm hiển form nhập token và đợi user nhập xong ======
-async function promptForToken() {
-  document.querySelector(".dom_accounts").classList.add("active");
-  document.querySelector(".dom_accounts_overlay").classList.add("active");
-
-  return new Promise((resolve) => {
-    const confirmBtn = document.getElementById("view_report");
-
-    const handler = () => {
-      const input = document.getElementById("access_token").value.trim();
-      if (!input) {
-        alert("Token bắt buộc!");
-        return;
-      }
-      localStorage.setItem("misa_token", input);
-      document.querySelector(".dom_accounts").classList.remove("active");
-      document
-        .querySelector(".dom_accounts_overlay")
-        .classList.remove("active");
-      confirmBtn.removeEventListener("click", handler);
-      resolve(input);
-    };
-
-    confirmBtn.addEventListener("click", handler);
-  });
-}
 
 // async function fetchLeads(from, to) {
 //   document.querySelector(".loading").classList.add("active");
@@ -285,7 +389,12 @@ const currentFilter = { campaign: null, source: null, medium: null };
 async function main() {
   const initRange = getDateRange("this_month");
 
-  RAW_DATA = await fetchLeads(initRange.from, initRange.to);
+  RAW_DATA = await fetchLeads(
+    initRange.from,
+    initRange.to,
+    "numt@ideas.edu.vn",
+    "Hieunu11089091"
+  );
 
   await processAndRenderAll(RAW_DATA);
   setupTimeDropdown();
