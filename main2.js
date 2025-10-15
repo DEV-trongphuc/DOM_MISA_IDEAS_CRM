@@ -136,10 +136,6 @@ async function getToken(username, password) {
   } catch (err) {
     console.error("LoginFlow thất bại:", err);
   }
-
-  // Nếu vẫn không có token → yêu cầu nhập tay
-  token = prompt("Nhập token MISA:");
-  localStorage.setItem("misa_token", token);
   return token;
 }
 
