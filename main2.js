@@ -7,20 +7,37 @@
 // ----------------------------------------
 let CRM_DATA = [];
 function waitForOTP() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const container = document.querySelector(".dom_accounts");
+    const overlay = document.querySelector(".dom_accounts_overlay");
     const confirmBtn = document.getElementById("view_report");
     const otpInput = document.getElementById("access_token");
 
-    confirmBtn.onclick = () => {
+    if (!container || !confirmBtn || !otpInput || !overlay) {
+      return reject("Không tìm thấy các thành phần UI OTP");
+    }
+
+    // Hiện UI
+    container.classList.add("active");
+    overlay.classList.add("active");
+
+    const handler = () => {
       const otp = otpInput.value.trim();
       if (!otp) {
         alert("Vui lòng nhập OTP!");
         return;
       }
+      // Ẩn UI sau khi confirm
+      container.classList.remove("active");
+      overlay.classList.remove("active");
+      confirmBtn.removeEventListener("click", handler);
       resolve(otp);
     };
+
+    confirmBtn.addEventListener("click", handler);
   });
 }
+
 async function loginFlow(username, password) {
   // ==== Bước 1: Login nhận temp token ====
   const formData1 = new FormData();
@@ -142,75 +159,42 @@ async function getToken(username, password) {
   return token;
 }
 
-async function fetchLeads(from, to, username, password) {
+async function fetchLeads(from, to, username, password, retries = 3) {
   document.querySelector(".loading").classList.add("active");
 
   try {
-    const token = await getToken(username, password);
+    let token = await getToken(username, password);
 
-    const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-    const res = await fetch(url);
-    const data = await res.json();
+    for (let i = 0; i < retries; i++) {
+      const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+      const res = await fetch(url);
+      const data = await res.json();
 
-    if (data.error || !data.data || data.data.length === 0) {
+      if (!data.error && data.data?.length) {
+        CRM_DATA = data.data;
+        document.querySelector(".loading").classList.remove("active");
+        return CRM_DATA;
+      }
+
       console.warn(
         "Token lỗi hoặc không có dữ liệu, xóa token và thử lại:",
         data.error
       );
       localStorage.removeItem("misa_token");
-      return fetchLeads(from, to, username, password); // Gọi lại
+      token = await getToken(username, password); // Lấy token mới
     }
 
-    CRM_DATA = data.data;
-    document.querySelector(".loading").classList.remove("active");
-    return CRM_DATA;
+    throw new Error("Không lấy được dữ liệu sau 3 lần thử");
   } catch (err) {
     console.error(err);
     alert("Không lấy được dữ liệu, thử token khác");
     localStorage.removeItem("misa_token");
     document.querySelector(".loading").classList.remove("active");
-    return fetchLeads(from, to, username, password);
   }
 }
+// const initRange = getDateRange("this_month");
 
-// Ví dụ gọi:
-// ====== Hàm hiển form nhập token và đợi user nhập xong ======
-
-// async function fetchLeads(from, to) {
-//   document.querySelector(".loading").classList.add("active");
-
-//   // ✅ Fix cứng token tạm thời ở đây
-//   let token =
-//     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJQYXlMb2FkRGF0YSI6IjY3MzNkZTA0LWU2ZjctNDc0YS05MWNkLTM4NTRjYjgxODg4MSIsImV4cCI6MTc2MDU3NjUyMiwiaXNzIjoiTUlTQSIsImF1ZCI6IkFNSVNDUk0yIn0.yq9ELkFtKmfycEN12XLYpCkRVjpZlN2yk_b2yeTJo8o";
-
-//   while (true) {
-//     // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-//     const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
-
-//     try {
-//       const res = await fetch(url);
-//       const data = await res.json();
-
-//       if (data.error) {
-//         alert("Lỗi: " + data.error);
-//         break; // ❌ không cần vòng lặp nhập lại token
-//       }
-
-//       if (!data.data || data.data.length === 0) {
-//         alert("Không có dữ liệu!");
-//         break;
-//       }
-
-//       CRM_DATA = data.data;
-//       document.querySelector(".loading").classList.remove("active");
-//       return CRM_DATA;
-//     } catch (err) {
-//       console.error(err);
-//       alert("Không lấy được dữ liệu, thử lại sau");
-//       break;
-//     }
-//   }
-// }
+// fetchLeads(initRange.from, initRange.to, "numt@ideas.edu.vn", "Hieunu11089091");
 
 // ----------------------------------------
 // 🧠 Hàm xử lý tag
