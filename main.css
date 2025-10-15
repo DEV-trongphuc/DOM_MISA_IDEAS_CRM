@@ -240,7 +240,6 @@ html {
   border-radius: 50rem;
 }
 .dom_select.time i:first-child {
-  color: var(--subClr);
 }
 .dom_select.quality {
   min-width: 10rem;
@@ -488,7 +487,7 @@ html {
 .radio_box {
   width: 16px;
   height: 16px;
-  border: 2px solid var(--subClr);
+  border: 2px solid var(--textClr);
   border-radius: 50%;
   display: inline-block;
   transition: 0.3s;
@@ -697,7 +696,7 @@ tbody {
   position: absolute;
   top: 50%;
   width: 8px;
-  background-color: var(--subClr);
+  background-color: var(--mainClr);
   left: 50%;
   transform: translate(-50%, -50%);
   opacity: 0;
