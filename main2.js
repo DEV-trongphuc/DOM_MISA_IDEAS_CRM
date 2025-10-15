@@ -318,6 +318,7 @@ async function processAndRenderAll(data) {
   renderSaleFilter(GROUPED);
   renderDegreeChart(data);
   renderProgramChart(GROUPED);
+  renderLeadTagChart(GROUPED);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -2479,10 +2480,11 @@ function renderLeadQualityMeter(grouped) {
 function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
   currentTagFilter = tagFilter;
   const ctx = document.getElementById("leadTrendChart");
+  console.log(grouped, currentTagFilter);
+
   if (!ctx) return;
 
   const dates = Object.keys(grouped.byDate).sort();
-  if (dates.length === 0) return;
 
   const totalCounts = [];
   const tagCounts = [];
