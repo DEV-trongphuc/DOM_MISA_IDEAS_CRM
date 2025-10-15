@@ -1,15 +1,6 @@
 // ----------------------------------------
 // ⚙️ Cấu hình Tag ưu tiên
 // ----------------------------------------
-const TAG_PRIORITY = [
-  "Qualified",
-  "Needed",
-  "Considering",
-  "Bad timing",
-  "Unqualified",
-  "Status - Junk",
-  "New",
-];
 
 // ----------------------------------------
 // 📥 Lấy dữ liệu giả lập từ local file
@@ -133,12 +124,22 @@ function getPrimaryTag(tags, priorityList) {
   for (const p of priorityList) {
     if (tags.some((t) => t.includes(p))) return p;
   }
-  return "New";
+  return "Untag";
 }
 
 // ----------------------------------------
 // 🧩 Xử lý dữ liệu chính
 // ----------------------------------------
+const tagPriority = [
+  "Needed",
+  "Qualified",
+  "Considering",
+  "Bad timing",
+  "Unqualified",
+  "Junk",
+  "New",
+  "Untag",
+];
 function processCRMData(data) {
   const result = {
     byDate: {},
@@ -149,16 +150,6 @@ function processCRMData(data) {
     byOrg: {},
     tagFrequency: {},
   };
-
-  const tagPriority = [
-    "Needed",
-    "Qualified",
-    "Considering",
-    "Bad timing",
-    "Unqualified",
-    "Junk",
-    "New",
-  ];
 
   for (let i = 0; i < data.length; i++) {
     const lead = data[i];
@@ -777,22 +768,32 @@ function renderLeadTagChartBySale(grouped, saleName) {
   const ownerData = grouped.byOwner[matchedKey];
   if (!ownerData) return;
 
-  // 🧮 Lấy tag & số lượng
-  const labels = Object.keys(ownerData.tags || {});
-  const values = labels.map((t) => ownerData.tags[t].count || 0);
+  // 🧭 Thứ tự cố định
+  const tagOrder = [
+    "Considering",
+    "Needed",
+    "Bad timing",
+    "Unqualified",
+    "Junk",
+    "New",
+    "Untag",
+  ];
 
-  // 🧹 Lọc bỏ tag có count = 0
-  const filtered = labels
-    .map((label, i) => ({ label, value: values[i] }))
+  // 🧮 Lấy tag & số lượng theo thứ tự cố định
+  const ordered = tagOrder
+    .map((tag) => ({
+      label: tag,
+      value: ownerData.tags?.[tag]?.count || 0,
+    }))
     .filter((d) => d.value > 0);
 
-  if (filtered.length === 0) {
+  if (ordered.length === 0) {
     ctx.parentElement.innerHTML = "<p class='empty-chart'>Không có dữ liệu</p>";
     return;
   }
 
-  const filteredLabels = filtered.map((d) => d.label);
-  const filteredValues = filtered.map((d) => d.value);
+  const filteredLabels = ordered.map((d) => d.label);
+  const filteredValues = ordered.map((d) => d.value);
 
   // 🎨 Màu vàng cho cao nhất, còn lại xám
   const maxValue = Math.max(...filteredValues);
@@ -800,7 +801,7 @@ function renderLeadTagChartBySale(grouped, saleName) {
     v === maxValue ? "#ffa900" : "#d9d9d9"
   );
 
-  // 🔄 Nếu chart đã có → update
+  // 🔄 Update chart nếu có
   if (window.leadTagChartBySaleInstance) {
     const chart = window.leadTagChartBySaleInstance;
     chart.data.labels = filteredLabels;
@@ -811,7 +812,7 @@ function renderLeadTagChartBySale(grouped, saleName) {
     return;
   }
 
-  // 🚀 Nếu chưa có → tạo mới
+  // 🚀 Tạo chart mới
   window.leadTagChartBySaleInstance = new Chart(ctx, {
     type: "bar",
     data: {
@@ -832,10 +833,7 @@ function renderLeadTagChartBySale(grouped, saleName) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: {
-        duration: 900,
-        easing: "easeOutQuart",
-      },
+      animation: { duration: 900, easing: "easeOutQuart" },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -849,7 +847,6 @@ function renderLeadTagChartBySale(grouped, saleName) {
           font: { weight: "bold", size: 12 },
           color: "#333",
           formatter: (v) => (v > 0 ? v : ""),
-          animation: { duration: 500, easing: "easeOutBack" },
         },
       },
       scales: {
