@@ -16,29 +16,69 @@ const TAG_PRIORITY = [
 // ----------------------------------------
 let CRM_DATA = [];
 
+// async function fetchLeads(from, to) {
+//   document.querySelector(".loading").classList.add("active");
+//   let token = localStorage.getItem("misa_token");
+
+//   while (true) {
+//     if (!token) {
+//       token = prompt("Nhập ACCESS TOKEN MISA:");
+//       if (!token) return alert("Token bắt buộc!");
+//       localStorage.setItem("misa_token", token);
+//     }
+
+//     const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
+
+//     try {
+//       const res = await fetch(url);
+//       const data = await res.json();
+
+//       if (data.error) {
+//         alert("Lỗi: " + data.error + ". Nhập token mới.");
+//         token = null;
+//         localStorage.removeItem("misa_token");
+//         continue;
+//       }
+
+//       if (!data.data || data.data.length === 0) {
+//         alert("Không có dữ liệu!");
+//         token = null;
+//         localStorage.removeItem("misa_token");
+//         continue;
+//       }
+
+//       CRM_DATA = data.data;
+//       document.querySelector(".loading").classList.remove("active");
+//       return CRM_DATA;
+//     } catch (err) {
+//       console.error(err);
+//       alert("Không lấy được dữ liệu, thử token khác");
+//       token = null;
+//       localStorage.removeItem("misa_token");
+//     }
+//   }
+// }
 async function fetchLeads(from, to) {
   document.querySelector(".loading").classList.add("active");
-  let token =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJQYXlMb2FkRGF0YSI6ImY5YzI5Y2JhLWQ5OWMtNDZjZi05MTBkLThiN2M4YmJiOWE5NSIsImV4cCI6MTc2MDUwOTE3MSwiaXNzIjoiTUlTQSIsImF1ZCI6IkFNSVNDUk0yIn0.uByJW-Og95sInr6b1_oNTE_UdOu7vLl10u50QG6d9CI";
+
+  // ✅ Fix cứng token tạm thời ở đây
+  let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJQYXlMb2FkRGF0YSI6IjY3MzNkZTA0LWU2ZjctNDc0YS05MWNkLTM4NTRjYjgxODg4MSIsImV4cCI6MTc2MDU3NjUyMiwiaXNzIjoiTUlTQSIsImF1ZCI6IkFNSVNDUk0yIn0.yq9ELkFtKmfycEN12XLYpCkRVjpZlN2yk_b2yeTJo8o";
 
   while (true) {
     const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+
     try {
       const res = await fetch(url);
       const data = await res.json();
 
       if (data.error) {
-        alert("Lỗi: " + data.error + ". Nhập token mới.");
-        token = null;
-        localStorage.removeItem("misa_token");
-        continue;
+        alert("Lỗi: " + data.error);
+        break; // ❌ không cần vòng lặp nhập lại token
       }
 
       if (!data.data || data.data.length === 0) {
         alert("Không có dữ liệu!");
-        token = null;
-        localStorage.removeItem("misa_token");
-        continue;
+        break;
       }
 
       CRM_DATA = data.data;
@@ -46,9 +86,8 @@ async function fetchLeads(from, to) {
       return CRM_DATA;
     } catch (err) {
       console.error(err);
-      alert("Không lấy được dữ liệu, thử token khác");
-      token = null;
-      localStorage.removeItem("misa_token");
+      alert("Không lấy được dữ liệu, thử lại sau");
+      break;
     }
   }
 }
@@ -232,36 +271,33 @@ const currentFilter = { campaign: null, source: null, medium: null };
 async function main() {
   const initRange = getDateRange("this_month");
 
-  // 🔹 Fetch dữ liệu mặc định theo tháng hiện tại
   RAW_DATA = await fetchLeads(initRange.from, initRange.to);
 
-  // ✅ Lần đầu process toàn bộ dữ liệu
-  GROUPED = processCRMData(RAW_DATA);
-  window.grouped = GROUPED;
-
-  // ✅ Render filter và chart ngay lần đầu
-  renderFilterOptions();
-  setupDropdowns();
+  await processAndRenderAll(RAW_DATA);
   setupTimeDropdown();
   setupAccountFilter();
   setupClearFilter();
-
-  // ✅ Lần đầu vẽ chart
+  setupQualityFilter();
+  setupLeadSearch();
+}
+main();
+async function processAndRenderAll(data) {
+  setupDropdowns();
+  GROUPED = processCRMData(data);
+  window.grouped = GROUPED;
+  renderLeadTable(data);
+  renderFilterOptions(data);
   renderLeadTrendChart(GROUPED);
   renderToplist(GROUPED);
-  renderCampaignPieChart(GROUPED);
-  renderLeadTable(RAW_DATA);
-  setupQualityFilter();
-  renderSaleFilter(GROUPED);
-  setupLeadSearch();
-  renderTagFrequency(GROUPED);
-
+  renderToplistBySale(GROUPED);
   renderLeadQualityMeter(GROUPED);
-
-  // ✅ thêm dòng này
+  renderCampaignPieChart(GROUPED);
+  renderTagFrequency(GROUPED);
+  renderSaleFilter(GROUPED);
+  renderDegreeChart(data);
+  renderProgramChart(GROUPED);
 }
 
-main();
 document.addEventListener("DOMContentLoaded", () => {
   const menuItems = document.querySelectorAll(".dom_menu li");
   const container = document.querySelector(".dom_container");
@@ -298,7 +334,7 @@ function renderSaleFilter(grouped) {
 // ============================
 // RENDER FILTERS
 // ============================
-function renderFilterOptions() {
+function renderFilterOptions(data) {
   const campaignSelect = document.querySelector(
     ".dom_select.campaign ul.dom_select_show"
   );
@@ -314,7 +350,7 @@ function renderFilterOptions() {
   mediumSelect.innerHTML = "";
 
   // ✅ 1️⃣ Campaign luôn render theo dữ liệu gốc (RAW_DATA)
-  const groupedAll = processCRMData(RAW_DATA);
+  const groupedAll = processCRMData(data);
   for (const [campaign, sources] of Object.entries(groupedAll.byCampaign)) {
     const total = Object.values(sources)
       .flatMap((s) => Object.values(s))
@@ -572,19 +608,9 @@ function applyFilter(type, value) {
   const filtered = filterLeadsBySelection(RAW_DATA);
 
   // 2️⃣ Process lại với dữ liệu đã lọc
-  GROUPED = processCRMData(filtered);
-  window.grouped = GROUPED; // cập nhật global để renderFilterOptions() dùng
 
+  processAndRenderAll(filtered);
   // 3️⃣ Render lại các bộ lọc (con)
-  renderFilterOptions();
-  renderLeadTrendChart(GROUPED);
-  renderToplist(GROUPED);
-  renderToplistBySale(GROUPED);
-  renderLeadQualityMeter(GROUPED);
-  renderCampaignPieChart(GROUPED);
-  renderLeadTable(filtered);
-  renderTagFrequency(GROUPED);
-  renderSaleFilter(GROUPED);
 
   // 4️⃣ Log kết quả / render bảng nếu cần
   console.log("✅ Filtered & regrouped data:", GROUPED);
@@ -927,20 +953,19 @@ function setupClearFilter() {
     console.log(currentAccount);
 
     // ✅ Process lại
-    GROUPED = processCRMData(filteredData);
-    window.grouped = GROUPED;
+    setActiveAccountUI(currentAccount);
+    processAndRenderAll(filteredData);
 
     // ✅ Re-render toàn bộ dashboard (theo account hiện tại)
-    renderFilterOptions();
-    renderLeadTrendChart(GROUPED, currentTagFilter);
-    updateLeadCounters(GROUPED, currentTagFilter);
-    renderToplist(GROUPED);
-    renderCampaignPieChart(GROUPED);
-    renderTagFrequency(GROUPED);
-    renderLeadQualityMeter(GROUPED);
-    renderLeadTable(filteredData);
-    renderSaleFilter(GROUPED);
-    setActiveAccountUI(currentAccount);
+    // renderFilterOptions();
+    // renderLeadTrendChart(GROUPED, currentTagFilter);
+    // updateLeadCounters(GROUPED, currentTagFilter);
+    // renderToplist(GROUPED);
+    // renderCampaignPieChart(GROUPED);
+    // renderTagFrequency(GROUPED);
+    // renderLeadQualityMeter(GROUPED);
+    // renderLeadTable(filteredData);
+    // renderSaleFilter(GROUPED);
   };
 }
 
@@ -991,15 +1016,6 @@ function getDateRange(option) {
     ).padStart(2, "0")}`;
   return { from: fmt(from), to: fmt(to) };
 }
-function renderAllDashboard(data, grouped) {
-  renderFilterOptions();
-  renderLeadTrendChart(grouped);
-  renderToplist(grouped);
-  renderCampaignPieChart(grouped);
-  renderLeadTable(data);
-  renderTagFrequency(grouped);
-  renderLeadQualityMeter(grouped);
-}
 
 // Hàm cập nhật UI account khi reset về Total Data
 function setActiveAccountUI(accountName) {
@@ -1011,26 +1027,21 @@ function setActiveAccountUI(accountName) {
   const accountMap = {
     VTCI: {
       img: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-      id: "CRM Misa",
     },
     IDEAS: {
       img: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-      id: "CRM Misa",
     },
     "Total Data": {
       img: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlIpztniIEN5ZYvLlwwqBvhzdodvu2NfPSbg&s",
-      id: "VTCI + IDEAS",
     },
   };
 
   const acc = accountMap[accountName] || accountMap["Total Data"];
   const avatar = activeBlock.querySelector(".account_item_avatar");
   const name = activeBlock.querySelector(".account_item_name");
-  const id = activeBlock.querySelector(".account_item_id");
 
   avatar.src = acc.img;
   name.textContent = accountName;
-  id.textContent = acc.id;
 
   // Ẩn account đang chọn khỏi danh sách
   document.querySelectorAll(".dom_account_view ul li").forEach((li) => {
@@ -1117,10 +1128,7 @@ function setupAccountFilter() {
       }
 
       // 🔹 Process lại và render lại toàn bộ dashboard
-      GROUPED = processCRMData(filtered);
-      window.grouped = GROUPED;
-      renderAllDashboard(filtered, GROUPED);
-      renderSaleFilter(GROUPED);
+      processAndRenderAll(filtered);
     };
   });
 
@@ -1177,16 +1185,10 @@ function setupTimeDropdown() {
 
       // ✅ Fetch lại theo ngày
       RAW_DATA = await fetchLeads(range.from, range.to);
-      GROUPED = processCRMData(RAW_DATA);
-      window.grouped = GROUPED;
-
       // ✅ Reset account về “Total Data”
       localStorage.setItem("selectedAccount", "Total Data");
       setActiveAccountUI("Total Data");
-
-      // ✅ Render lại dashboard
-      renderAllDashboard(RAW_DATA, GROUPED);
-
+      processAndRenderAll(RAW_DATA);
       list.classList.remove("active");
     };
   });
@@ -1214,15 +1216,10 @@ function setupTimeDropdown() {
 
     // ✅ Fetch lại
     RAW_DATA = await fetchLeads(start, end);
-    GROUPED = processCRMData(RAW_DATA);
-    window.grouped = GROUPED;
-
+    processAndRenderAll(RAW_DATA);
     // ✅ Reset account về “Total Data”
     localStorage.setItem("selectedAccount", "Total Data");
     setActiveAccountUI("Total Data");
-
-    renderAllDashboard(RAW_DATA, GROUPED);
-
     list.classList.remove("active");
     customBox.classList.remove("show");
   };
@@ -1273,7 +1270,7 @@ function renderLeadTagChart(grouped) {
 
   const labels = Object.keys(grouped.byTag);
   const values = labels.map((tag) => grouped.byTag[tag].length);
-  const barColors = labels.map(() => "rgba(255, 161, 0, 0.8)");
+  const barColors = labels.map(() => "rgba(255, 162, 0, 0.9)");
 
   // Nếu chart đã tồn tại → chỉ update data
   if (window.leadTagChartInstance) {
@@ -1355,34 +1352,53 @@ function renderLeadTagChart(grouped) {
   });
 }
 
-function renderToplist(grouped) {
+// ======================
+// 🧩 Render Toplist
+// ======================
+function renderToplist(grouped, mode = "default") {
   const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist");
   if (!wrap || !grouped?.byCampaign) return;
 
   const list = [];
 
-  // 🧮 Duyệt tất cả Campaign / Source / Medium
+  // 🧮 Duyệt dữ liệu
   for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
+    let totalCampaign = 0;
+    let qualityCampaign = 0;
+
     for (const [source, mediums] of Object.entries(sources)) {
       for (const [medium, leads] of Object.entries(mediums)) {
         const total = leads.length;
-
-        // Đếm Needed + Considering
         const needed = leads.filter((l) => l.TagMain === "Needed").length;
         const considering = leads.filter(
           (l) => l.TagMain === "Considering"
         ).length;
         const quality = needed + considering;
-
         const ratio = total > 0 ? (quality / total) * 100 : 0;
 
-        list.push({
-          key: `${campaign} - ${source} - ${medium}`,
-          total,
-          quality,
-          ratio: +ratio.toFixed(1),
-        });
+        totalCampaign += total;
+        qualityCampaign += quality;
+
+        if (mode === "default") {
+          list.push({
+            key: `${campaign} - ${source} - ${medium}`,
+            total,
+            quality,
+            ratio: +ratio.toFixed(1),
+          });
+        }
       }
+    }
+
+    if (mode === "campaign") {
+      const ratio =
+        totalCampaign > 0 ? (qualityCampaign / totalCampaign) * 100 : 0;
+      list.push({
+        key: `${campaign}`,
+        total: totalCampaign,
+        quality: qualityCampaign,
+        ratio: +ratio.toFixed(1),
+      });
     }
   }
 
@@ -1392,34 +1408,79 @@ function renderToplist(grouped) {
   // 🧹 Xóa nội dung cũ
   wrap.innerHTML = "";
 
-  // 🚀 Render lại danh sách
+  // 🎨 Logo map
+  const logos = [
+    {
+      match: /facebook|fb/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
+    },
+    {
+      match: /google/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
+    },
+    {
+      match: /tiktok/i,
+      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
+    },
+    {
+      match: /linkedin/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
+    },
+    {
+      match: /zalo/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
+    },
+    {
+      match: /Other - Web VTCI/i,
+      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
+    },
+    {
+      match: /Other - Web IDEAS/i,
+      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
+    },
+  ];
+
+  const defaultLogo =
+    "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
+
+  // 🚀 Render danh sách
   for (const item of list) {
     // 🎨 Chọn màu theo ratio
-    let barColor = "rgb(0, 177, 72)"; // xanh
-    if (item.ratio < 20) barColor = "rgb(225, 112, 85)"; // đỏ
-    else if (item.ratio < 40) barColor = "rgb(255, 169, 0)"; // vàng
+    let barColor = "rgb(0, 177, 72)";
+    if (item.ratio < 20) barColor = "rgb(225, 112, 85)";
+    else if (item.ratio < 40) barColor = "rgb(255, 169, 0)";
+
+    // 🧩 Chọn logo phù hợp
+    let logo = defaultLogo;
+    for (const entry of logos) {
+      if (entry.match.test(item.key)) {
+        logo = entry.url;
+        break;
+      }
+    }
 
     const html = `
       <li>
         <p>
+          <img src="${logo}" />
           <span>${item.key}</span>
-          <span>
-            <span>${item.quality}/${item.total}</span>
-            <span 
-              style="color:${barColor};  background:rgba(${barColor
-      .replace("rgb(", "")
-      .replace(")", "")}, 0.1);">
-              ${item.ratio.toFixed(1)}%
-            </span>
-          </span>
         </p>
         <p>
-          <span class="progress-bar" 
-            style="
-              width:${item.ratio}%; 
-        background:${barColor};
-            ">
-          </span>
+          <i class="fa-solid fa-user"></i>
+          <span class="total_lead">${item.total}</span>
+        </p>
+        <p>
+          <i class="fa-solid fa-user-graduate"></i>
+          <span class="quality_lead">${item.quality}</span>
+        </p>
+        <p class="toplist_percent" 
+           style="color:${barColor}; background:rgba(${barColor
+      .replace("rgb(", "")
+      .replace(")", "")},0.1)">
+           ${item.ratio}%
+        </p>
+        <p class="toplist_more">
+          <i class="fa-solid fa-ellipsis"></i>
         </p>
       </li>
     `;
@@ -1427,6 +1488,29 @@ function renderToplist(grouped) {
     wrap.insertAdjacentHTML("beforeend", html);
   }
 }
+
+// ======================
+// ⚙️ Nút toggle chế độ lọc
+// ======================
+document.addEventListener("DOMContentLoaded", () => {
+  const btnSource = document.querySelector(".button_group .btn-source");
+  const btnCampaign = document.querySelector(".button_group .btn-campaign");
+
+  if (!btnSource || !btnCampaign) return;
+
+  btnSource.addEventListener("click", () => {
+    btnSource.classList.add("active");
+    btnCampaign.classList.remove("active");
+    renderToplist(GROUPED, "default");
+  });
+
+  btnCampaign.addEventListener("click", () => {
+    btnCampaign.classList.add("active");
+    btnSource.classList.remove("active");
+    renderToplist(GROUPED, "campaign");
+  });
+});
+
 function renderToplistBySale(grouped) {
   const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist.sale");
   if (!wrap || !grouped?.byOwner) return;
@@ -1621,11 +1705,11 @@ function renderCampaignPieChart(grouped) {
       },
       plugins: {
         legend: {
-          position: "right", // ✅ canh bên phải
+          position: "bottom", // ✅ canh bên phải
           align: "center",
           labels: {
-            boxWidth: 14,
-            padding: 8,
+            boxWidth: 8,
+            padding: 10,
             color: "#333",
             font: { size: 11, weight: "500" },
           },
@@ -1916,9 +2000,13 @@ function renderTagFrequency(grouped) {
           "Status - Bad timing",
           "Status - Junk",
           "Qualified",
+          "Msc_AI UMEF",
+          "MBA UMEF",
+          "EMBA UMEF",
           "Unqualified",
           "Status - New",
           "Junk",
+          "BBA",
         ].includes(tag)
     ); // bỏ các tag chính
 
@@ -1958,6 +2046,229 @@ function renderTagFrequency(grouped) {
       `;
     wrap.insertAdjacentHTML("beforeend", html);
   }
+}
+function renderDegreeChart(grouped) {
+  const ctx = document.getElementById("degreeChart");
+
+  if (!ctx || !grouped) return;
+
+  // 🧮 Gom dữ liệu theo nhóm trình độ
+  const degreeCounts = {
+    "Cử nhân": 0,
+    "Cao đẳng": 0,
+    "Dưới cao đẳng": 0,
+    THPT: 0,
+    "Sinh viên": 0,
+    Khác: 0,
+  };
+
+  grouped.forEach((lead) => {
+    let desc = (lead.Description || "").toLowerCase().trim();
+
+    // ⚠️ Thứ tự kiểm tra rất quan trọng
+    if (/(cử[\s_]*nhân|cu[\s_]*nhan)/.test(desc)) {
+      degreeCounts["Cử nhân"]++;
+    } else if (/(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/.test(desc)) {
+      degreeCounts["Dưới cao đẳng"]++;
+    } else if (/(cao[\s_]*đẳng|cao[\s_]*dang)/.test(desc)) {
+      degreeCounts["Cao đẳng"]++;
+    } else if (/\bthpt\b|trung[\s_]*học[\s_]*phổ[\s_]*thông/.test(desc)) {
+      degreeCounts["THPT"]++;
+    } else if (/(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/.test(desc)) {
+      degreeCounts["Sinh viên"]++;
+    } else if (desc !== "") {
+      degreeCounts["Khác"]++;
+    }
+  });
+
+  // 🏷️ Label + Value
+  const labels = Object.keys(degreeCounts);
+  const values = Object.values(degreeCounts);
+
+  const barColors = [
+    "rgba(255, 171, 0, 0.8)", // vàng (Cử nhân)
+    "rgba(38, 42, 83, 0.8)", // xanh đậm (Cao đẳng)
+    "rgba(0, 177, 72, 0.8)", // xanh lá (Dưới cao đẳng)
+    "rgba(255, 99, 132, 0.8)", // đỏ (THPT)
+    "rgba(54, 162, 235, 0.8)", // xanh dương (Sinh viên)
+    "rgba(153, 102, 255, 0.8)", // tím (Khác)
+  ];
+
+  // 🔄 Nếu chart đã có → cập nhật
+  if (window.degreeChartInstance) {
+    const chart = window.degreeChartInstance;
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.update("active");
+    return;
+  }
+
+  // 🚀 Tạo chart mới
+  window.degreeChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Số lượng học viên theo trình độ học vấn",
+          data: values,
+          backgroundColor: barColors,
+          borderColor: barColors.map((c) => c.replace("0.8", "1")),
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 900,
+        easing: "easeOutQuart",
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y.toLocaleString()} học viên`,
+          },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: { weight: "bold", size: 12 },
+          formatter: (v) => (v > 0 ? v : ""),
+          animation: { duration: 500, easing: "easeOutBack" },
+        },
+      },
+      scales: {
+        x: {
+          grid: {
+            display: true,
+            color: "rgba(0,0,0,0.05)",
+            drawTicks: false,
+            drawBorder: false,
+          },
+          ticks: { font: { size: 12 }, color: "#555" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 11 },
+            color: "#666",
+            stepSize: Math.ceil(Math.max(...values) / 4) || 1,
+            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
+          },
+          afterDataLimits: (scale) => (scale.max *= 1.1),
+          grid: { color: "rgba(0,0,0,0.05)" },
+        },
+      },
+    },
+    plugins: [ChartDataLabels],
+  });
+}
+function renderProgramChart(grouped) {
+  const ctx = document.getElementById("programChart");
+  if (!ctx || !grouped?.tagFrequency) return;
+
+  // 🎯 Lấy dữ liệu từ tagFrequency
+  const freq = grouped.tagFrequency;
+
+  const programs = {
+    "MSc AI UMEF": freq["Msc_AI UMEF"] || 0,
+    "MBA UMEF": freq["MBA UMEF"] || 0,
+    "EMBA UMEF": freq["EMBA UMEF"] || 0,
+    BBA: freq["BBA"] || 0,
+    DBA: freq["DBA"] || 0,
+  };
+
+  const labels = Object.keys(programs);
+  const values = Object.values(programs);
+
+  const colors = [
+    "#262a53", // xanh than
+    "#ffa900", // vàng
+    "#55efc4", // xanh mint
+    "#74b9ff", // xanh nhạt
+    "#e17055", // cam
+  ];
+
+  // 🔄 Nếu chart đã tồn tại thì cập nhật
+  if (window.programChartInstance) {
+    const chart = window.programChartInstance;
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.update("active");
+    return;
+  }
+
+  // 🚀 Tạo chart mới
+  window.programChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Leads theo chương trình học",
+          data: values,
+          backgroundColor: colors,
+          borderColor: colors.map((c) => c),
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 800,
+        easing: "easeOutQuart",
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
+          },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: {
+            weight: "bold",
+            size: 12,
+          },
+          color: "#333",
+          formatter: (v) => (v > 0 ? v : ""),
+        },
+      },
+      scales: {
+        x: {
+          grid: {
+            display: true,
+            color: "rgba(0, 0, 0, 0.05)",
+          },
+          ticks: {
+            font: { size: 12 },
+            color: "#555",
+          },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 11 },
+            color: "#666",
+            stepSize: Math.ceil(Math.max(...values) / 4) || 1,
+            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
+          },
+          afterDataLimits: (scale) => (scale.max *= 1.1),
+          grid: { color: "rgba(0, 0, 0, 0.05)" },
+        },
+      },
+    },
+    plugins: [ChartDataLabels],
+  });
 }
 
 function renderLeadQualityMeter(grouped) {
@@ -2091,7 +2402,7 @@ function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
         easing: "easeOutQuart",
       },
       plugins: {
-        legend: { position: "top", align: "end" },
+        legend: false,
         tooltip: {
           callbacks: {
             label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
@@ -2100,1226 +2411,12 @@ function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
       },
       scales: {
         x: { ticks: { color: "#555" }, grid: { color: "rgba(0,0,0,0.05)" } },
-        y: { beginAtZero: true, grid: { color: "rgba(0,0,0,0.05)" } },
+        y: {
+          beginAtZero: true,
+          grid: { color: "rgba(0,0,0,0.05)" },
+          afterDataLimits: (scale) => (scale.max *= 1.1),
+        },
       },
     },
   });
 }
-
-// ============================
-// Khởi tạo sau khi có dữ liệu
-// ============================
-
-// Ví dụ dùng:
-// document.addEventListener("DOMContentLoaded", function () {
-//   window.lastFetchedLeads = []; // biến toàn cục lưu leads
-//   const dom_account_view_block = document.querySelector(
-//     ".dom_account_view_block"
-//   );
-
-//   if (dom_account_view_block) {
-//     dom_account_view_block.onclick = () => {
-//       dom_account_view_block.classList.add("active");
-//     };
-//   }
-
-//   function getCampaign(lead) {
-//     return (
-//       lead.CustomField13Text?.trim() || lead.campaign || "Unknown Campaign"
-//     );
-//   }
-//   function getSource(lead) {
-//     return lead.CustomField14Text?.trim() || lead.source || "Unknown Source";
-//   }
-//   function getMedium(lead) {
-//     return lead.CustomField15Text?.trim() || lead.medium || "Unknown Medium";
-//   }
-//   function updateLeadCount(leads, tagFilter = "Needed") {
-//     // 🧩 Xử lý tag tránh lỗi [object Object]
-//     const tag =
-//       typeof tagFilter === "string"
-//         ? tagFilter
-//         : (tagFilter?.toString?.() || "Needed").toString();
-
-//     console.log("🟢 updateLeadCount called with tag =", tag);
-
-//     // 🧮 Tính toán số lượng
-//     const total = Array.isArray(leads) ? leads.length : Number(leads) || 0;
-//     const tagCount = Array.isArray(leads)
-//       ? leads.filter((l) => getMainTag(l) === tag).length
-//       : 0;
-
-//     const percent = total ? ((tagCount / total) * 100).toFixed(1) : 0;
-
-//     // 🎨 Màu tương ứng theo tag
-//     const tagColors = {
-//       Needed: "rgba(255, 146, 146, 1)", // đỏ hồng
-//       Considering: "rgba(255, 206, 86, 1)", // vàng
-//       "Bad timing": "rgba(54, 162, 235, 1)", // xanh dương
-//       Unqualified: "rgba(153, 102, 255, 1)", // tím
-//       Junk: "rgba(201, 203, 207, 1)", // xám nhạt
-//       Default: "rgba(100, 100, 100, 0.7)", // fallback
-//     };
-
-//     const bgColor = tagColors[tag] || tagColors.Default;
-
-//     // 🧮 Cập nhật tổng lead
-//     const leadEl = document.querySelector("#count_lead span");
-//     if (leadEl) leadEl.textContent = total.toLocaleString("en-US");
-
-//     // 🧮 Cập nhật tag count + %
-//     const neededWrap = document.querySelector("#count_needed");
-//     const neededEl = neededWrap?.querySelector("span");
-//     if (neededEl) {
-//       neededEl.textContent = `${tag}: ${tagCount.toLocaleString(
-//         "en-US"
-//       )} (${percent}%)`;
-//     }
-
-//     // 🎨 Đổi background #count_needed đồng bộ màu tag
-//     if (neededWrap) {
-//       neededWrap.style.backgroundColor = bgColor;
-//     }
-//   }
-
-//   const TAG_PRIORITY = [
-//     "Needed",
-//     "Qualified",
-//     "Considering",
-//     "Bad timing",
-//     "Unqualified",
-//     "Junk",
-//     "New",
-//     "Uknow",
-//   ];
-//   function attachAccountFilter(leads) {
-//     const wrap = document.querySelector(".dom_account_view");
-//     if (!wrap) return;
-
-//     const activeBlock = wrap.querySelector(".dom_account_view_block");
-//     const accountList = wrap.querySelectorAll("ul li");
-
-//     // Lấy trạng thái cũ từ localStorage
-//     let savedAccount = localStorage.getItem("selectedAccount") || "Total Data";
-
-//     // Nếu có tài khoản được lưu → kích hoạt lại
-//     const savedLi = Array.from(accountList).find((li) =>
-//       li.textContent.includes(savedAccount)
-//     );
-//     if (savedLi) setActiveAccount(savedLi, savedAccount, leads);
-
-//     // Gắn sự kiện click cho từng item
-//     accountList.forEach((li) => {
-//       li.onclick = () => {
-//         const accountName =
-//           li.querySelector("p span:first-child")?.textContent.trim() ||
-//           "Total Data";
-
-//         // Lưu lại lựa chọn
-//         localStorage.setItem("selectedAccount", accountName);
-
-//         // Đóng dropdown
-//         wrap.classList.remove("active");
-
-//         // Gọi cập nhật UI + filter
-//         setActiveAccount(li, accountName, leads);
-//       };
-//     });
-
-//     // Toggle danh sách khi click vào khối trên
-//     activeBlock.onclick = (e) => {
-//       e.stopPropagation();
-//       activeBlock.classList.toggle("active");
-//     };
-//     document.addEventListener("click", () =>
-//       activeBlock.classList.remove("active")
-//     );
-
-//     // ========== Hàm chính: cập nhật khi chọn account ==========
-//     function setActiveAccount(li, accountName, leads) {
-//       // ✅ Cập nhật hiển thị khối account_item phía trên
-//       const name =
-//         li.querySelector("p span:first-child")?.textContent || "Total Data";
-//       const id = li.querySelector("p span:last-child")?.textContent || "";
-//       const avatar = li.querySelector("img")?.src || "";
-
-//       activeBlock.innerHTML = `
-//         <div class="account_item">
-//           <div>
-//             <img class="account_item_avatar" src="${avatar}" />
-//             <div class="account_item_info">
-//               <p class="account_item_name">${name}</p>
-//               <p class="account_item_id">${id}</p>
-//             </div>
-//           </div>
-//           <i class="fa-solid fa-sort"></i>
-//         </div>
-//       `;
-
-//       // ✅ Lọc theo account
-//       let filteredLeads =
-//         accountName === "Total Data"
-//           ? leads
-//           : leads.filter(
-//               (l) =>
-//                 l.CustomField16Text?.trim()?.toLowerCase() ===
-//                 accountName.toLowerCase()
-//             );
-
-//       // ✅ Reset filter state (All Campaign / All Source / All Medium)
-//       window.selectedCampaign = "__ALL__";
-//       window.selectedSource = "__ALL__";
-//       window.selectedMedium = "__ALL__";
-//       document.querySelector(".dom_select.campaign .dom_selected").textContent =
-//         "All Campaign";
-//       document.querySelector(".dom_select.source .dom_selected").textContent =
-//         "All Source";
-//       document.querySelector(".dom_select.medium .dom_selected").textContent =
-//         "All Medium";
-
-//       // ✅ Cập nhật dropdown theo dữ liệu account
-//       window.groupedAll = groupLeadsByCampaign(filteredLeads);
-//       buildCampaignDropdown();
-//       buildSourceDropdown("__ALL__");
-//       buildMediumDropdown("__ALL__", "__ALL__");
-
-//       // ✅ Render lại toàn bộ giao diện
-//       renderLeadTagChart(filteredLeads);
-//       renderLeadTrendChart(filteredLeads);
-//       renderToplistByNeeded(filteredLeads);
-//       renderLeadTable(filteredLeads);
-//       attachQualityDropdown(filteredLeads);
-//       updateLeadCount(filteredLeads, "Needed");
-//     }
-//     setTimeout(() => {
-//       const savedAcc = localStorage.getItem("selectedAccount") || "Total Data";
-//       const li = Array.from(accountList).find((el) =>
-//         el.textContent.includes(savedAcc)
-//       );
-//       if (li) li.click(); // ép render đúng data theo account
-//     }, 0);
-//   }
-
-//   // 🔹 Hàm lấy tag chính theo ưu tiên
-//   function getMainTag(lead) {
-//     if (!lead || !lead.TagIDText) return "Uknow";
-
-//     const tags = lead.TagIDText.split(",")
-//       .map((t) =>
-//         t
-//           .replace(/^0\.\s*/, "") // bỏ prefix "0. "
-//           .trim()
-//           .toLowerCase()
-//       )
-//       .filter(Boolean);
-
-//     // Ưu tiên cao → thấp
-//     for (const pri of TAG_PRIORITY) {
-//       if (tags.some((t) => t.includes(pri.toLowerCase()))) {
-//         // Gộp Qualified vào Needed
-//         if (pri === "Qualified") return "Needed";
-//         return pri;
-//       }
-//     }
-
-//     return "Uknow";
-//   }
-
-//   // 🔹 Hàm đếm số lượng lead theo tag chính
-//   function countLeadsByTag(leads) {
-//     // Tạo object đếm mặc định
-//     const counts = {
-//       Needed: 0,
-//       Considering: 0,
-//       "Bad timing": 0,
-//       Unqualified: 0,
-//       Junk: 0,
-//       New: 0,
-//       Uknow: 0,
-//     };
-
-//     leads.forEach((lead) => {
-//       const tag = getMainTag(lead);
-//       // Gộp Qualified → Needed khi cộng
-//       const group = tag === "Qualified" ? "Needed" : tag;
-//       counts[group] = (counts[group] || 0) + 1;
-//     });
-
-//     return counts;
-//   }
-
-//   function groupLeadsByTag(leads) {
-//     const grouped = {};
-//     leads.forEach((lead) => {
-//       const tag = getMainTag(lead);
-//       if (!grouped[tag]) grouped[tag] = [];
-//       grouped[tag].push(lead);
-//     });
-//     return grouped;
-//   }
-
-//   function groupLeadsByDate(leads) {
-//     const grouped = {};
-
-//     leads.forEach((lead) => {
-//       // 🔹 Lấy ngày hợp lệ (YYYY-MM-DD)
-//       let dateStr =
-//         lead.CreatedDate?.split("T")[0] ||
-//         lead.CreatedDateText?.split("T")[0] ||
-//         lead.created_at?.split("T")[0] ||
-//         lead.created ||
-//         null;
-//       if (!dateStr) return;
-
-//       // Chuẩn hóa định dạng
-//       const d = new Date(dateStr);
-//       if (isNaN(d)) return;
-//       const y = d.getFullYear();
-//       const m = String(d.getMonth() + 1).padStart(2, "0");
-//       const day = String(d.getDate()).padStart(2, "0");
-//       const key = `${y}-${m}-${day}`;
-
-//       // Lấy tag chính
-//       const tag = getMainTag(lead);
-
-//       // 🔸 Nếu chưa có ngày đó → khởi tạo
-//       if (!grouped[key]) {
-//         grouped[key] = { total: 0 };
-//       }
-
-//       // Tăng tổng lead
-//       grouped[key].total++;
-
-//       // Tăng theo từng tag
-//       if (!grouped[key][tag]) grouped[key][tag] = 0;
-//       grouped[key][tag]++;
-//     });
-
-//     // 🔹 Sắp xếp theo ngày
-//     const sortedKeys = Object.keys(grouped).sort();
-//     return sortedKeys.map((date) => ({
-//       date,
-//       ...grouped[date],
-//     }));
-//   }
-
-//   // Nhóm dữ liệu theo Campaign → Source → Medium
-//   function groupLeadsByCampaign(leads) {
-//     const grouped = {};
-//     leads.forEach((lead) => {
-//       const campaign = getCampaign(lead);
-//       const source = getSource(lead);
-//       const medium = getMedium(lead);
-
-//       if (!grouped[campaign]) grouped[campaign] = {};
-//       if (!grouped[campaign][source]) grouped[campaign][source] = {};
-//       if (!grouped[campaign][source][medium])
-//         grouped[campaign][source][medium] = [];
-
-//       grouped[campaign][source][medium].push(lead);
-//     });
-//     return grouped;
-//   }
-//   // CHART
-//   let leadChartInstance = null;
-//   let currentTagFilter = "Needed"; // mặc định
-
-//   function renderLeadTrendChart(leads, tagFilter = currentTagFilter) {
-//     currentTagFilter = tagFilter;
-
-//     const ctx = document.getElementById("leadTrendChart");
-//     if (!ctx) return;
-
-//     const grouped = groupLeadsByDate(leads);
-//     if (grouped.length === 0) return;
-
-//     const dates = grouped.map((g) => g.date);
-//     const totalCounts = grouped.map((g) => g.total || 0);
-//     const tagCounts = grouped.map((g) => g[tagFilter] || 0);
-
-//     const ctx2d = ctx.getContext("2d");
-
-//     // 🎨 Màu gradient cho từng loại tag
-//     const tagColors = {
-//       Needed: ["rgba(255, 146, 146, 0.8)", "rgba(255, 146, 146, 0.1)"], // đỏ hồng
-//       Considering: ["rgba(255, 206, 86, 0.8)", "rgba(255, 206, 86, 0.1)"], // vàng nhạt
-//       "Bad timing": ["rgba(54, 162, 235, 0.8)", "rgba(54, 162, 235, 0.1)"], // xanh dương
-//       Unqualified: ["rgba(153, 102, 255, 0.8)", "rgba(153, 102, 255, 0.1)"], // tím
-//       Junk: ["rgba(201, 203, 207, 0.8)", "rgba(201, 203, 207, 0.1)"], // xám nhạt
-//       Default: ["rgba(100, 100, 100, 0.6)", "rgba(100, 100, 100, 0.1)"], // fallback
-//     };
-
-//     const [tagTop, tagBottom] = tagColors[tagFilter] || tagColors.Default;
-
-//     // Gradient màu tổng (Total Leads)
-//     const gradientTotal = ctx2d.createLinearGradient(0, 0, 0, 400);
-//     gradientTotal.addColorStop(0, "rgba(255, 171, 0, 0.8)");
-//     gradientTotal.addColorStop(1, "rgba(255, 171, 0, 0.1)");
-
-//     // Gradient màu tag (tùy theo tagFilter)
-//     const gradientTag = ctx2d.createLinearGradient(0, 0, 0, 400);
-//     gradientTag.addColorStop(0, tagTop);
-//     gradientTag.addColorStop(1, tagBottom);
-
-//     // 🔄 Xóa chart cũ
-//     if (leadChartInstance) leadChartInstance.destroy();
-
-//     // 🚀 Vẽ chart
-//     leadChartInstance = new Chart(ctx, {
-//       type: "line",
-//       data: {
-//         labels: dates,
-//         datasets: [
-//           {
-//             label: "Total Leads",
-//             data: totalCounts,
-//             backgroundColor: gradientTotal,
-//             borderColor: "rgba(255, 171, 0, 1)",
-//             fill: true,
-//             tension: 0.25,
-//             pointRadius: 3,
-//             pointHoverRadius: 6,
-//           },
-//           {
-//             label: `${tagFilter} Leads`,
-//             data: tagCounts,
-//             backgroundColor: gradientTag,
-//             borderColor: tagTop.replace("0.8", "1"), // cùng màu border
-//             fill: true,
-//             tension: 0.25,
-//             pointRadius: 3,
-//             pointHoverRadius: 6,
-//           },
-//         ],
-//       },
-//       options: {
-//         responsive: true,
-//         maintainAspectRatio: false,
-//         animation: { duration: 700, easing: "easeOutQuart" },
-//         plugins: {
-//           legend: { position: "top", align: "end" },
-//           tooltip: {
-//             callbacks: {
-//               label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
-//             },
-//           },
-//         },
-//         scales: {
-//           x: {
-//             grid: {
-//               display: true,
-//               color: "rgba(0, 0, 0, 0.05)",
-//               drawTicks: false,
-//               drawBorder: false,
-//             },
-//             ticks: { color: "#555", font: { size: 12 } },
-//           },
-//           y: {
-//             beginAtZero: true,
-//             ticks: {
-//               color: "#555",
-//               font: { size: 12 },
-//               precision: 0,
-//               maxTicksLimit: 5,
-//               callback: (v) => v.toLocaleString("en-US"),
-//             },
-//             grid: { color: "rgba(0, 0, 0, 0.05)" },
-//           },
-//         },
-//         elements: {
-//           line: { borderWidth: 2 },
-//           point: { hoverBorderWidth: 2, hoverBorderColor: "#fff" },
-//         },
-//       },
-//     });
-//   }
-
-//   function attachQualityDropdown(leads) {
-//     const wrap = document.querySelector(".dom_select.quality");
-//     if (!wrap) return;
-
-//     const label = wrap.querySelector(".dom_selected");
-//     const menu = wrap.querySelector(".dom_select_show");
-//     const header = wrap.querySelector(".flex");
-
-//     // 🟡 Toggle menu khi click header
-//     header.onclick = (e) => {
-//       e.stopPropagation();
-//       document
-//         .querySelectorAll(".dom_select")
-//         .forEach((s) => s !== wrap && s.classList.remove("active"));
-//       wrap.classList.toggle("active");
-//     };
-
-//     // 🟢 Click chọn từng tag
-//     menu.querySelectorAll("li").forEach((li) => {
-//       li.onclick = () => {
-//         const tag =
-//           li.querySelector("span:last-child")?.textContent.trim() || "Needed";
-
-//         // Update UI
-//         menu
-//           .querySelectorAll("li")
-//           .forEach((i) => i.classList.remove("active"));
-//         li.classList.add("active");
-//         label.textContent = tag;
-//         wrap.classList.remove("active");
-
-//         // Render lại chart + count
-//         renderLeadTrendChart(leads, tag);
-//         updateLeadCount(leads, tag);
-//       };
-//     });
-
-//     // 🟠 Đóng menu khi click ngoài
-//     document.onclick = (e) => {
-//       if (!wrap.contains(e.target)) wrap.classList.remove("active");
-//     };
-
-//     // 🟢 Khởi tạo mặc định “Needed”
-//     const defaultTag = "Needed";
-//     label.textContent = defaultTag;
-
-//     const defaultLi = Array.from(menu.querySelectorAll("li")).find((li) =>
-//       li.textContent.trim().toLowerCase().includes(defaultTag.toLowerCase())
-//     );
-//     if (defaultLi) {
-//       menu.querySelectorAll("li").forEach((i) => i.classList.remove("active"));
-//       defaultLi.classList.add("active");
-//     }
-
-//     // 🧭 Render chart & count mặc định
-//     renderLeadTrendChart(leads, defaultTag);
-//     updateLeadCount(leads, defaultTag);
-//   }
-
-//   let leadTagChartInstance = null;
-
-//   function renderLeadTagChart(leads) {
-//     const ctx = document.getElementById("leadTagChart");
-//     if (!ctx) return;
-
-//     const counts = countLeadsByTag(leads);
-//     const labels = Object.keys(counts);
-//     const values = Object.values(counts);
-
-//     // 🎨 Màu riêng cho từng tag
-//     const tagColors = {
-//       Needed: "rgba(255, 99, 132, 1)", // vàng cam
-//       Qualified: "rgba(255, 171, 0, 1)",
-//       Considering: "rgb(54, 235, 226)", // xanh dương
-//       "Bad timing": "rgba(153, 102, 255, 1)", // đỏ hồng
-//       Unqualified: "rgb(176, 196, 0)", // tím
-//       Junk: "rgb(87, 87, 87)", // xám
-//       New: "rgb(233, 93, 0)", // xanh ngọc
-//       Uknow: "rgb(189, 189, 189)", // xám nhạt
-//     };
-
-//     // Gán màu cho từng tag
-//     const barColors = labels.map(
-//       (tag) => tagColors[tag] || "rgba(200,200,200,0.5)"
-//     );
-
-//     // Xóa chart cũ nếu có
-//     if (window.leadTagChartInstance) window.leadTagChartInstance.destroy();
-
-//     // 🚀 Tạo bar chart
-//     window.leadTagChartInstance = new Chart(ctx, {
-//       type: "bar",
-//       data: {
-//         labels,
-//         datasets: [
-//           {
-//             label: "Leads by Tag",
-//             data: values,
-//             backgroundColor: barColors,
-//             borderColor: barColors.map((c) => c.replace("0.8", "1")),
-//             borderWidth: 1,
-//             borderRadius: 6,
-//           },
-//         ],
-//       },
-//       options: {
-//         responsive: true,
-//         maintainAspectRatio: false,
-//         plugins: {
-//           legend: { display: false },
-//           tooltip: {
-//             callbacks: {
-//               label: (ctx) => `${ctx.parsed.y} leads`,
-//             },
-//           },
-//           datalabels: {
-//             anchor: "end",
-//             align: "end",
-//             color: "#444",
-//             font: {
-//               weight: "bold",
-//               size: 12,
-//             },
-//             formatter: (value) => (value > 0 ? value : ""),
-//           },
-//         },
-//         scales: {
-//           x: {
-//             grid: {
-//               display: true, // ✅ sọc đứng
-//               color: "rgba(0, 0, 0, 0.05)",
-//               lineWidth: 1,
-//               drawTicks: false,
-//               drawBorder: false,
-//             },
-//             ticks: {
-//               font: { size: 12 },
-//               color: "#555",
-//             },
-//           },
-//           y: {
-//             beginAtZero: true,
-//             ticks: {
-//               font: { size: 11 },
-//               color: "#666",
-//               stepSize: Math.ceil(Math.max(...values) / 4) || 1,
-//               callback: function (value) {
-//                 return value >= 1000 ? (value / 1000).toFixed(0) + "k" : value;
-//               },
-//             },
-//             afterDataLimits: (scale) => {
-//               scale.max *= 1.1; // tăng 10%
-//             },
-//             grid: {
-//               color: "rgba(0, 0, 0, 0.05)",
-//             },
-//           },
-//         },
-//       },
-//       plugins: [ChartDataLabels],
-//     });
-//   }
-
-//   function renderToplistByNeeded(leads) {
-//     const list = document.querySelector(".dom_toplist");
-//     if (!list) return;
-
-//     // Nhóm theo Campaign → Source → Medium
-//     const grouped = {};
-//     leads.forEach((lead) => {
-//       const campaign = getCampaign(lead);
-//       const source = getSource(lead);
-//       const medium = getMedium(lead);
-//       const key = `${campaign} - ${source} - ${medium}`;
-
-//       if (!grouped[key]) grouped[key] = [];
-//       grouped[key].push(lead);
-//     });
-
-//     // Tính số Needed và tổng
-//     const stats = Object.keys(grouped).map((key) => {
-//       const arr = grouped[key];
-//       const total = arr.length;
-//       const neededCount = arr.filter((l) => getMainTag(l) === "Needed").length;
-//       const percent = total ? ((neededCount / total) * 100).toFixed(1) : 0;
-//       return { key, neededCount, total, percent: parseFloat(percent) };
-//     });
-
-//     // ✅ Sắp xếp: NeededCount > % Needed > Total
-//     stats.sort((a, b) => {
-//       if (b.neededCount !== a.neededCount) return b.neededCount - a.neededCount;
-//       if (b.percent !== a.percent) return b.percent - a.percent;
-//       return b.total - a.total;
-//     });
-
-//     // Render tối đa 10 dòng
-//     list.innerHTML = stats
-//       .slice(0, 10)
-//       .map((item) => {
-//         const highlightClass = item.percent >= 50 ? "main_bg" : "";
-//         return `
-//       <li>
-//         <p>
-//           <span>${item.key}</span>
-//           <span>
-//             <span>${item.neededCount}/${item.total}</span>
-//             <span class="${highlightClass}">${item.percent}%</span>
-//           </span>
-//         </p>
-//         <p>
-//           <span class="progress-bar" style="width:${item.percent}%;"></span>
-//         </p>
-//       </li>
-//     `;
-//       })
-//       .join("");
-//   }
-//   // ============ GLOBAL STATE ============
-//   window.leadAll = [];
-//   window.groupedAll = {};
-//   window.currentRange = null;
-//   const loading = document.querySelector(".loading");
-//   const domDateEl = document.querySelector(".dom_date");
-//   const clearBtn = document.querySelector(".clear_filter");
-
-//   // ============ HELPER FUNCTIONS ============
-//   // ============ HELPER FUNCTIONS ============
-//   // Lấy tên campaign, source, medium từ custom field của MISA
-//   // 🗓️ Nhóm lead theo ngày
-
-//   const uniq = (arr) =>
-//     [...new Set(arr)].filter(Boolean).sort((a, b) => a.localeCompare(b));
-//   const escapeHtml = (s = "") =>
-//     String(s).replace(
-//       /[&<>"']/g,
-//       (c) =>
-//         ({
-//           "&": "&amp;",
-//           "<": "&lt;",
-//           ">": "&gt;",
-//           '"': "&quot;",
-//           "'": "&#39;",
-//         }[c])
-//     );
-//   const parseYMD = (s) => {
-//     const [Y, M, D] = s.split("-").map(Number);
-//     return new Date(Y, M - 1, D);
-//   };
-//   const toDMY = (d) =>
-//     `${String(d.getDate()).padStart(2, "0")}/${String(
-//       d.getMonth() + 1
-//     ).padStart(2, "0")}/${d.getFullYear()}`;
-
-//   // ============ MAIN ENTRY ============
-//   function setLeadAll(leads) {
-//     window.leadAll = Array.isArray(leads) ? leads : [];
-//     window.groupedAll = groupLeadsByCampaign(window.leadAll);
-//     buildCampaignDropdown();
-//   }
-//   function renderLeadTable(leads) {
-//     const container = document.querySelector(".dom_table_box");
-//     if (!container) return;
-
-//     if (!Array.isArray(leads) || leads.length === 0) {
-//       container.innerHTML = `<div class="dom_table_container empty"><p>Không có dữ liệu để hiển thị</p></div>`;
-//       return;
-//     }
-
-//     // ====== Xây header ======
-//     const headers = [
-//       "Created Date",
-//       "Lead Name",
-//       "Email",
-//       "Mobile",
-//       "Owner",
-//       "Tag",
-//       "Campaign",
-//       "Source",
-//       "Medium",
-//       "Description",
-//     ];
-
-//     // ====== Render body ======
-//     const rowsHtml = leads
-//       .map((lead, i) => {
-//         const {
-//           CreatedDate,
-//           LeadName,
-//           Email,
-//           Mobile,
-//           OwnerIDText,
-//           TagIDText,
-//           CustomField13Text,
-//           CustomField14Text,
-//           CustomField15Text,
-//           Description,
-//         } = lead;
-
-//         return `
-//           <tr data-id="${i}">
-//             <td>${
-//               CreatedDate
-//                 ? new Date(CreatedDate).toLocaleDateString("vi-VN")
-//                 : "-"
-//             }</td>
-//             <td>${LeadName || "-"}</td>
-//             <td>${Email || "-"}</td>
-//             <td>${Mobile || "-"}</td>
-//             <td>${OwnerIDText || "-"}</td>
-//             <td>${TagIDText || "-"}</td>
-//             <td>${CustomField13Text || "-"}</td>
-//             <td>${CustomField14Text || "-"}</td>
-//             <td>${CustomField15Text || "-"}</td>
-//             <td>${Description || "-"}</td>
-//           </tr>
-//         `;
-//       })
-//       .join("");
-
-//     // ====== Render footer (tổng dòng) ======
-//     const footer = `
-//       <tfoot>
-//         <tr>  <td></td>
-//           <td colspan="${headers.length}">
-//             <strong>Total ${leads.length.toLocaleString("en-US")} Row${
-//       leads.length > 1 ? "s" : ""
-//     }</strong>
-//           </td>
-//         </tr>
-//       </tfoot>
-//     `;
-
-//     // ====== Render bảng hoàn chỉnh ======
-//     container.innerHTML = `
-//       <div class="dom_table_container">
-//         <table id="main_table">
-//           <thead>
-//             <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
-//           </thead>
-//           <tbody>${rowsHtml}</tbody>
-//           ${footer}
-//         </table>
-//       </div>
-//     `;
-//   }
-
-//   // ============ BUILD DROPDOWN CẤP 1 ============
-//   function buildCampaignDropdown() {
-//     const wrap = document.querySelector(".dom_select.campaign");
-//     const campaigns = Object.keys(window.groupedAll);
-//     const options = campaigns.map(
-//       (k) => `${k} (${countAll(window.groupedAll[k])})`
-//     );
-
-//     buildOptions(wrap, "All Campaign", options, (value) => {
-//       window.selectedCampaign = value.split(" (")[0];
-
-//       // 🔸 Reset Source & Medium
-//       window.selectedSource = "__ALL__";
-//       window.selectedMedium = "__ALL__";
-
-//       // Cập nhật label UI
-//       const sourceWrap = document.querySelector(".dom_select.source");
-//       const mediumWrap = document.querySelector(".dom_select.medium");
-//       if (sourceWrap)
-//         sourceWrap.querySelector(".dom_selected").textContent = "All Source";
-//       if (mediumWrap)
-//         mediumWrap.querySelector(".dom_selected").textContent = "All Medium";
-
-//       // Xóa trạng thái active của 2 dropdown con
-//       document
-//         .querySelectorAll(".dom_select.source li, .dom_select.medium li")
-//         .forEach((li) => li.classList.remove("active"));
-
-//       // 🔹 Build lại 2 dropdown con
-//       buildSourceDropdown(window.selectedCampaign);
-//       buildMediumDropdown(window.selectedCampaign, "__ALL__");
-
-//       // 🔹 Render lại dữ liệu
-//       renderFilteredLeads();
-//     });
-//   }
-
-//   // ============ BUILD DROPDOWN CẤP 2 ============
-//   function buildSourceDropdown(campaign) {
-//     const wrap = document.querySelector(".dom_select.source");
-//     let sources = [];
-
-//     if (campaign && campaign !== "__ALL__") {
-//       const srcObj = window.groupedAll[campaign] || {};
-//       sources = Object.keys(srcObj).map((k) => `${k} (${countAll(srcObj[k])})`);
-//     } else {
-//       // Union tất cả source
-//       for (const c of Object.keys(window.groupedAll)) {
-//         const srcObj = window.groupedAll[c];
-//         for (const s of Object.keys(srcObj)) {
-//           sources.push(`${s} (${countAll(srcObj[s])})`);
-//         }
-//       }
-//     }
-
-//     buildOptions(wrap, "All Source", uniq(sources), (value) => {
-//       window.selectedSource = value.split(" (")[0];
-
-//       // 🔸 Reset Medium
-//       window.selectedMedium = "__ALL__";
-
-//       const mediumWrap = document.querySelector(".dom_select.medium");
-//       if (mediumWrap)
-//         mediumWrap.querySelector(".dom_selected").textContent = "All Medium";
-
-//       document
-//         .querySelectorAll(".dom_select.medium li")
-//         .forEach((li) => li.classList.remove("active"));
-
-//       // 🔹 Build lại Medium dropdown
-//       buildMediumDropdown(window.selectedCampaign, window.selectedSource);
-
-//       // 🔹 Render lại dữ liệu
-//       renderFilteredLeads();
-//     });
-
-//     // Reset label hiển thị
-//     wrap.querySelector(".dom_selected").textContent = "All Source";
-//   }
-
-//   // ============ BUILD DROPDOWN CẤP 3 ============
-//   function buildMediumDropdown(campaign, source) {
-//     const wrap = document.querySelector(".dom_select.medium");
-//     let mediums = [];
-//     if (campaign && source && campaign !== "__ALL__" && source !== "__ALL__") {
-//       const medObj = window.groupedAll[campaign]?.[source] || {};
-//       mediums = Object.keys(medObj).map((k) => `${k} (${medObj[k].length})`);
-//     } else {
-//       for (const c of Object.keys(window.groupedAll)) {
-//         for (const s of Object.keys(window.groupedAll[c])) {
-//           const medObj = window.groupedAll[c][s];
-//           for (const m of Object.keys(medObj)) {
-//             mediums.push(`${m} (${medObj[m].length})`);
-//           }
-//         }
-//       }
-//     }
-//     buildOptions(wrap, "All Medium", uniq(mediums), (value) => {
-//       window.selectedMedium = value.split(" (")[0];
-//       renderFilteredLeads();
-//     });
-//     wrap.querySelector(".dom_selected").textContent = "All Medium";
-//   }
-
-//   // ============ TÍNH TỔNG SỐ LEAD ============
-//   function countAll(obj) {
-//     let count = 0;
-//     for (const s of Object.keys(obj)) {
-//       if (Array.isArray(obj[s])) count += obj[s].length;
-//       else count += countAll(obj[s]);
-//     }
-//     return count;
-//   }
-
-//   // ============ BUILD OPTION CHUNG ============
-//   function buildOptions(wrap, allLabel, values, onSelect) {
-//     const ul = wrap.querySelector(".dom_select_show");
-//     const label = wrap.querySelector(".dom_selected");
-//     const header = wrap.querySelector(".flex");
-//     if (!ul || !label || !header) return;
-
-//     // 🧹 Xây danh sách item
-//     const items = [
-//       `<li class="active" data-value="__ALL__">
-//           <span class="radio_box"></span><span>${allLabel}</span>
-//        </li>`,
-//       ...values.map(
-//         (v) =>
-//           `<li data-value="${escapeHtml(v)}">
-//               <span class="radio_box"></span><span>${escapeHtml(v)}</span>
-//            </li>`
-//       ),
-//     ];
-//     ul.innerHTML = items.join("");
-//     label.textContent = allLabel;
-
-//     // 🟢 Gắn onclick cho từng item
-//     const listItems = ul.querySelectorAll("li");
-//     listItems.forEach((li) => {
-//       li.onclick = () => {
-//         // Cập nhật trạng thái active
-//         listItems.forEach((i) => i.classList.remove("active"));
-//         li.classList.add("active");
-
-//         // Cập nhật label hiển thị
-//         label.textContent =
-//           li.querySelector("span:last-child")?.textContent.trim() || allLabel;
-
-//         // Đóng dropdown
-//         wrap.classList.remove("active");
-
-//         // Gọi callback (trả về data-value hoặc "__ALL__")
-//         const value = li.dataset.value || "__ALL__";
-//         onSelect?.(value);
-//       };
-//     });
-
-//     // 🟡 Toggle hiển thị menu khi click header
-//     header.onclick = (e) => {
-//       e.stopPropagation();
-//       document
-//         .querySelectorAll(".dom_select")
-//         .forEach((s) => s !== wrap && s.classList.remove("active"));
-//       wrap.classList.toggle("active");
-//     };
-
-//     // 🟠 Đóng menu khi click ra ngoài
-//     document.onclick = (e) => {
-//       if (!wrap.contains(e.target)) wrap.classList.remove("active");
-//     };
-//   }
-
-//   // ============ RENDER SAU KHI LỌC ============
-//   function renderFilteredLeads() {
-//     let data = window.leadAll;
-//     const c = window.selectedCampaign;
-//     const s = window.selectedSource;
-//     const m = window.selectedMedium;
-
-//     if (c && c !== "__ALL__") data = data.filter((x) => getCampaign(x) === c);
-//     if (s && s !== "__ALL__") data = data.filter((x) => getSource(x) === s);
-//     if (m && m !== "__ALL__") data = data.filter((x) => getMedium(x) === m);
-
-//     // 🔹 Nhóm theo tag chính
-//     const groupedByTag = groupLeadsByTag(data);
-
-//     console.groupCollapsed(
-//       `Filtered Result → Campaign: ${c || "All"}, Source: ${
-//         s || "All"
-//       }, Medium: ${m || "All"}`
-//     );
-//     console.log("📊 Total:", data.length);
-//     console.table(
-//       data.map((x, i) => ({
-//         STT: i + 1,
-//         Name: x.FullName || x.Name || "-",
-//         Phone: x.Phone || "-",
-//         Tag: getMainTag(x),
-//         Campaign: x.CustomField13Text || "-",
-//         Source: x.CustomField14Text || "-",
-//         Medium: x.CustomField15Text || "-",
-//         CreatedDate: x.CreatedDate || "-",
-//       }))
-//     );
-//     console.log("Grouped by Tag:", groupedByTag);
-//     console.groupEnd();
-
-//     // 🔹 Cập nhật UI
-//     attachQualityDropdown(data);
-//     renderLeadTagChart(data);
-//     renderToplistByNeeded(data);
-//     renderLeadTable(data);
-
-//     // 🧮 (nếu muốn chart tag hoặc tỷ lệ tag, có thể thêm ở đây)
-//   }
-
-//   // ============ CLEAR FILTER ============
-//   if (clearBtn) {
-//     clearBtn.onclick = () => {
-//       // 🧭 Reset state
-//       window.selectedCampaign = "__ALL__";
-//       window.selectedSource = "__ALL__";
-//       window.selectedMedium = "__ALL__";
-
-//       // 🔒 Đóng tất cả dropdowns đang mở
-//       document
-//         .querySelectorAll(".dom_select")
-//         .forEach((s) => s.classList.remove("active"));
-
-//       // 🧹 Reset label & trạng thái active cho dropdowns
-//       const dropdowns = [
-//         { selector: ".dom_select.campaign", text: "All Campaign" },
-//         { selector: ".dom_select.source", text: "All Source" },
-//         { selector: ".dom_select.medium", text: "All Medium" },
-//       ];
-
-//       dropdowns.forEach((d) => {
-//         const wrap = document.querySelector(d.selector);
-//         if (!wrap) return;
-
-//         // Reset label text
-//         const label = wrap.querySelector(".dom_selected");
-//         if (label) label.textContent = d.text;
-
-//         // Reset active state
-//         const lis = wrap.querySelectorAll("li");
-//         lis.forEach((li) => li.classList.remove("active"));
-//         const first = wrap.querySelector("li:first-child");
-//         if (first) first.classList.add("active");
-//       });
-
-//       // 🌀 Rebuild lại dropdowns dựa trên dữ liệu gốc
-//       window.groupedAll = groupLeadsByCampaign(window.leadAll);
-//       buildCampaignDropdown();
-//       buildSourceDropdown("__ALL__");
-//       buildMediumDropdown("__ALL__", "__ALL__");
-
-//       // 🔁 Hiển thị lại toàn bộ leads
-//       renderFilteredLeads();
-
-//       // 📊 Reset lại biểu đồ & đếm tag
-//       updateLeadCount(window.leadAll, "Needed");
-//       renderLeadTrendChart(window.leadAll, "Needed");
-
-//       // 🎯 Gắn lại dropdown quality (vì chart bị render lại)
-//       attachQualityDropdown(window.leadAll);
-
-//       console.log(
-//         "🔄 Cleared filters → showing all leads:",
-//         window.leadAll.length
-//       );
-//     };
-//   }
-
-//   // ============ TIME FILTER ============
-//   attachTimeDropdownHandlers(onRangePicked);
-
-//   function onRangePicked(fromYMD, toYMD, labelText) {
-//     window.currentRange = { from: fromYMD, to: toYMD };
-//     if (domDateEl) {
-//       const f = toDMY(parseYMD(fromYMD));
-//       const t = toDMY(parseYMD(toYMD));
-//       domDateEl.textContent = `${f} - ${t}`;
-//     }
-
-//     // fetchLeads(fromYMD, toYMD) => Promise
-//     fetchLeads(fromYMD, toYMD).then(() => {
-//       const data = window.lastFetchedLeads || [];
-//       setLeadAll(data);
-//       attachAccountFilter(data); // <-- đảm bảo khôi phục filter
-//       attachQualityDropdown(data);
-//       renderLeadTagChart(data);
-//       renderToplistByNeeded(data);
-//       renderLeadTable(data);
-//     });
-//   }
-
-//   // ============ TIME DROPDOWN ============
-//   function attachTimeDropdownHandlers(onPicked) {
-//     const timeSelect = document.querySelector(".dom_select.time");
-//     if (!timeSelect) return;
-
-//     const selectedLabel = timeSelect.querySelector(".dom_selected");
-//     const menu = timeSelect.querySelector(".dom_select_show");
-//     const customBox = timeSelect.querySelector(".custom_date");
-//     const header = timeSelect.querySelector(".flex");
-//     const applyBtn = timeSelect.querySelector(".apply_custom_date");
-
-//     // 🟡 Toggle menu khi click header
-//     header.onclick = (e) => {
-//       e.stopPropagation();
-//       document
-//         .querySelectorAll(".dom_select")
-//         .forEach((s) => s !== timeSelect && s.classList.remove("active"));
-//       timeSelect.classList.toggle("active");
-//     };
-
-//     // 🟢 Click chọn từng mục thời gian
-//     const lis = menu.querySelectorAll("li");
-//     lis.forEach((li) => {
-//       li.onclick = (e) => {
-//         e.stopPropagation();
-//         const type = li.dataset.date;
-
-//         if (type === "custom_range") {
-//           // Nếu chọn Custom Range → hiển thị khung nhập ngày
-//           lis.forEach((i) => i.classList.remove("active"));
-//           li.classList.add("active");
-//           customBox.classList.add("show");
-//           return;
-//         }
-
-//         // Cập nhật trạng thái
-//         lis.forEach((i) => i.classList.remove("active"));
-//         li.classList.add("active");
-
-//         // Đổi label
-//         selectedLabel.textContent =
-//           li.querySelector("span:last-child")?.textContent.trim() ||
-//           "This Month";
-
-//         // Lấy range tương ứng
-//         const range = getDateRange(type);
-//         if (range) onPicked(range.from, range.to, selectedLabel.textContent);
-
-//         // Đóng dropdown
-//         timeSelect.classList.remove("active");
-//         customBox.classList.remove("show");
-//       };
-//     });
-
-//     // 🟠 Áp dụng khi chọn custom date
-//     if (applyBtn) {
-//       applyBtn.onclick = () => {
-//         const start = document.getElementById("start").value;
-//         const end = document.getElementById("end").value;
-//         if (!start || !end) return;
-
-//         // Giới hạn ngày tối thiểu
-//         const minDate = new Date("2025-10-01");
-//         const startDate = new Date(start);
-//         const endDate = new Date(end);
-
-//         if (startDate < minDate) {
-//           alert("⚠️ Ngày bắt đầu không được trước 01/10/2025.");
-//           return;
-//         }
-
-//         if (endDate <= startDate) {
-//           alert("⚠️ Ngày kết thúc phải sau ngày bắt đầu.");
-//           return;
-//         }
-
-//         selectedLabel.textContent = "Custom Date";
-//         onPicked(start, end, "Custom Date");
-
-//         timeSelect.classList.remove("active");
-//         customBox.classList.remove("show");
-//       };
-//     }
-
-//     // 🔹 Đóng khi click ngoài hoặc bấm ESC
-//     document.onclick = (e) => {
-//       if (!timeSelect.contains(e.target)) timeSelect.classList.remove("active");
-//     };
-//     document.onkeydown = (e) => {
-//       if (e.key === "Escape") timeSelect.classList.remove("active");
-//     };
-//   }
-
-//   function getDateRange(option) {
-//     const startOfDay = (d) => {
-//       d.setHours(0, 0, 0, 0);
-//       return d;
-//     };
-//     const today = startOfDay(new Date());
-//     const mondayThisWeek = (() => {
-//       const k = (today.getDay() + 6) % 7;
-//       const d = new Date(today);
-//       d.setDate(today.getDate() - k);
-//       return d;
-//     })();
-//     let from, to;
-//     switch (option) {
-//       case "this_week":
-//         from = new Date(mondayThisWeek);
-//         to = new Date(mondayThisWeek);
-//         to.setDate(from.getDate() + 6);
-//         break;
-//       case "last_week":
-//         from = new Date(mondayThisWeek);
-//         from.setDate(from.getDate() - 7);
-//         to = new Date(from);
-//         to.setDate(from.getDate() + 6);
-//         break;
-//       case "this_month":
-//         from = new Date(today.getFullYear(), today.getMonth(), 1);
-//         to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-//         break;
-//       case "last_month":
-//         from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-//         to = new Date(today.getFullYear(), today.getMonth(), 0);
-//         break;
-//       case "this_year":
-//         from = new Date(today.getFullYear(), 0, 1);
-//         to = new Date(today.getFullYear(), 11, 31);
-//         break;
-//       default:
-//         from = new Date(today);
-//         to = new Date(today);
-//     }
-//     const fmt = (d) =>
-//       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-//         d.getDate()
-//       ).padStart(2, "0")}`; // không dùng toISOString()
-
-//     return { from: fmt(from), to: fmt(to) };
-//   }
-
-//   // ============ AUTO LOAD LẦN ĐẦU ============
-//   const init = getDateRange("this_month");
-//   onRangePicked(init.from, init.to, "This Month");
-// });
