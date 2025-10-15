@@ -150,8 +150,13 @@ async function getToken(username, password) {
   localStorage.setItem("misa_token", token);
   return token;
 }
-
-async function fetchLeads(from, to, username, password, retries = 3) {
+async function fetchLeads(
+  from,
+  to,
+  username = "numt@ideas.edu.vn",
+  password = "Hieunu11089091",
+  retries = 3
+) {
   document.querySelector(".loading").classList.add("active");
 
   try {
@@ -364,12 +369,7 @@ const currentFilter = { campaign: null, source: null, medium: null };
 async function main() {
   const initRange = getDateRange("this_month");
 
-  RAW_DATA = await fetchLeads(
-    initRange.from,
-    initRange.to,
-    "numt@ideas.edu.vn",
-    "Hieunu11089091"
-  );
+  RAW_DATA = await fetchLeads(initRange.from, initRange.to);
 
   await processAndRenderAll(RAW_DATA);
   setupTimeDropdown();
@@ -871,11 +871,6 @@ function renderLeadTagChartBySale(grouped, saleName) {
       value: ownerData.tags?.[tag]?.count || 0,
     }))
     .filter((d) => d.value > 0);
-
-  if (ordered.length === 0) {
-    ctx.parentElement.innerHTML = "<p class='empty-chart'>Không có dữ liệu</p>";
-    return;
-  }
 
   const filteredLabels = ordered.map((d) => d.label);
   const filteredValues = ordered.map((d) => d.value);
@@ -2179,9 +2174,11 @@ function renderTagFrequency(grouped) {
     wrap.insertAdjacentHTML("beforeend", html);
   }
 }
-function renderDegreeChart(grouped = []) {
+function renderDegreeChart(grouped) {
   const ctx = document.getElementById("degreeChart");
-  if (!ctx || !grouped) return;
+  console.log("grouped", grouped);
+
+  if (!ctx) return;
 
   // 🧮 Gom dữ liệu theo nhóm trình độ
   const degreeCounts = {
@@ -2312,11 +2309,6 @@ function renderProgramChart(grouped) {
 
   // 🧹 Lọc bỏ những cái = 0
   const filtered = Object.entries(programs).filter(([_, v]) => v > 0);
-  if (filtered.length === 0) {
-    ctx.parentElement.innerHTML = "<p class='empty-chart'>Không có dữ liệu</p>";
-    return;
-  }
-
   const labels = filtered.map(([k]) => k);
   const values = filtered.map(([_, v]) => v);
 
@@ -2391,120 +2383,6 @@ function renderProgramChart(grouped) {
 }
 
 // ====================== DEGREE CHART ======================
-function renderDegreeChart(grouped) {
-  const ctx = document.getElementById("degreeChart");
-  if (!ctx || !grouped) return;
-
-  const degreeCounts = {
-    "Cử nhân": 0,
-    "Cao đẳng": 0,
-    "Dưới cao đẳng": 0,
-    THPT: 0,
-    "Sinh viên": 0,
-    Khác: 0,
-  };
-
-  grouped.forEach((lead) => {
-    let desc = (lead.Description || "").toLowerCase().trim();
-
-    if (/(cử[\s_]*nhân|cu[\s_]*nhan)/.test(desc)) {
-      degreeCounts["Cử nhân"]++;
-    } else if (/(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/.test(desc)) {
-      degreeCounts["Dưới cao đẳng"]++;
-    } else if (/(cao[\s_]*đẳng|cao[\s_]*dang)/.test(desc)) {
-      degreeCounts["Cao đẳng"]++;
-    } else if (/\bthpt\b|trung[\s_]*học[\s_]*phổ[\s_]*thông/.test(desc)) {
-      degreeCounts["THPT"]++;
-    } else if (/(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/.test(desc)) {
-      degreeCounts["Sinh viên"]++;
-    } else if (desc !== "") {
-      degreeCounts["Khác"]++;
-    }
-  });
-
-  // 🧹 Lọc bỏ mấy cột = 0
-  const filtered = Object.entries(degreeCounts).filter(([_, v]) => v > 0);
-  if (filtered.length === 0) {
-    ctx.parentElement.innerHTML = "<p class='empty-chart'>Không có dữ liệu</p>";
-    return;
-  }
-
-  const labels = filtered.map(([k]) => k);
-  const values = filtered.map(([_, v]) => v);
-
-  const maxValue = Math.max(...values);
-  const barColors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
-
-  if (window.degreeChartInstance) {
-    const chart = window.degreeChartInstance;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = barColors;
-    chart.data.datasets[0].borderColor = barColors;
-    chart.update("active");
-    return;
-  }
-
-  window.degreeChartInstance = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Số lượng học viên theo trình độ học vấn",
-          data: values,
-          backgroundColor: barColors,
-          borderColor: barColors,
-          borderWidth: 1,
-          borderRadius: 6,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 900, easing: "easeOutQuart" },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} học viên`,
-          },
-        },
-        datalabels: {
-          anchor: "end",
-          align: "end",
-          font: { weight: "bold", size: 12 },
-          formatter: (v) => (v > 0 ? v : ""),
-          animation: { duration: 500, easing: "easeOutBack" },
-        },
-      },
-      scales: {
-        x: {
-          grid: {
-            display: true,
-            color: "rgba(0,0,0,0.05)",
-            drawTicks: false,
-            drawBorder: false,
-          },
-          ticks: { font: { size: 12 }, color: "#555" },
-        },
-        y: {
-          beginAtZero: true,
-          ticks: {
-            font: { size: 11 },
-            color: "#666",
-            stepSize: Math.ceil(Math.max(...values) / 4) || 1,
-            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
-          },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
-          grid: { color: "rgba(0,0,0,0.05)" },
-        },
-      },
-    },
-    plugins: [ChartDataLabels],
-  });
-}
 function renderLeadQualityMeter(grouped) {
   if (!grouped?.byTag) return;
 
