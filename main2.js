@@ -120,22 +120,25 @@ async function getToken(username, password) {
 
   // 2️⃣ Thử quickLogin
   try {
-    const { token: qToken } = await quickLogin();
-    if (qToken) return qToken;
+    const qData = await quickLogin();
+    if (qData?.token) return qData.token;
   } catch (err) {
     console.warn("QuickLogin không thành công:", err);
   }
 
   // 3️⃣ Nếu vẫn chưa có → gọi loginFlow với OTP
   try {
-    const { token: lToken } = await loginFlow(username, password);
-    if (lToken) {
-      localStorage.setItem("misa_token", lToken);
-      return lToken;
+    const lData = await loginFlow(username, password);
+    if (lData?.token) {
+      return lData.token; // loginFlow đã lưu token rồi nếu dùng phiên bản UI mới
     }
   } catch (err) {
     console.error("LoginFlow thất bại:", err);
   }
+
+  // 4️⃣ Nếu vẫn không có token → yêu cầu nhập tay
+  token = prompt("Nhập token MISA:");
+  if (token) localStorage.setItem("misa_token", token);
   return token;
 }
 
