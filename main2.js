@@ -16,17 +16,80 @@ const TAG_PRIORITY = [
 // ----------------------------------------
 let CRM_DATA = [];
 
+async function fetchLeads(from, to) {
+  document.querySelector(".loading").classList.add("active");
+  let token = localStorage.getItem("misa_token");
+
+  // Nếu chưa có token → hiện popup nhập
+  if (!token) {
+    document.querySelector(".dom_accounts").classList.add("active");
+    document.querySelector(".dom_accounts_overlay").classList.add("active");
+
+    // Trả về promise đợi user nhập xong
+    token = await new Promise((resolve) => {
+      const confirmBtn = document.getElementById("view_report");
+
+      const handler = () => {
+        const input = document.getElementById("access_token").value.trim();
+        if (!input) {
+          alert("Token bắt buộc!");
+          return;
+        }
+        localStorage.setItem("misa_token", input);
+        document.querySelector(".dom_accounts").classList.remove("active");
+        document
+          .querySelector(".dom_accounts_overlay")
+          .classList.remove("active");
+        confirmBtn.removeEventListener("click", handler);
+        resolve(input);
+      };
+
+      confirmBtn.addEventListener("click", handler);
+    });
+  }
+
+  // ===============================
+  // Tiến hành fetch dữ liệu
+  // ===============================
+  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.error) {
+      alert("Lỗi: " + data.error + ". Nhập token mới.");
+      localStorage.removeItem("misa_token");
+      return fetchLeads(from, to); // Gọi lại để hiển popup nhập token mới
+    }
+
+    if (!data.data || data.data.length === 0) {
+      alert("Không có dữ liệu!");
+      document.querySelector(".loading").classList.remove("active");
+      return [];
+    }
+
+    CRM_DATA = data.data;
+    document.querySelector(".loading").classList.remove("active");
+    return CRM_DATA;
+  } catch (err) {
+    console.error(err);
+    alert("Không lấy được dữ liệu, thử token khác");
+    localStorage.removeItem("misa_token");
+    document.querySelector(".loading").classList.remove("active");
+    return fetchLeads(from, to);
+  }
+}
+
 // async function fetchLeads(from, to) {
 //   document.querySelector(".loading").classList.add("active");
-//   let token = localStorage.getItem("misa_token");
+
+//   // ✅ Fix cứng token tạm thời ở đây
+//   let token =
+//     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJQYXlMb2FkRGF0YSI6IjY3MzNkZTA0LWU2ZjctNDc0YS05MWNkLTM4NTRjYjgxODg4MSIsImV4cCI6MTc2MDU3NjUyMiwiaXNzIjoiTUlTQSIsImF1ZCI6IkFNSVNDUk0yIn0.yq9ELkFtKmfycEN12XLYpCkRVjpZlN2yk_b2yeTJo8o";
 
 //   while (true) {
-//     if (!token) {
-//       token = prompt("Nhập ACCESS TOKEN MISA:");
-//       if (!token) return alert("Token bắt buộc!");
-//       localStorage.setItem("misa_token", token);
-//     }
-
+//     // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
 //     const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
 
 //     try {
@@ -34,17 +97,13 @@ let CRM_DATA = [];
 //       const data = await res.json();
 
 //       if (data.error) {
-//         alert("Lỗi: " + data.error + ". Nhập token mới.");
-//         token = null;
-//         localStorage.removeItem("misa_token");
-//         continue;
+//         alert("Lỗi: " + data.error);
+//         break; // ❌ không cần vòng lặp nhập lại token
 //       }
 
 //       if (!data.data || data.data.length === 0) {
 //         alert("Không có dữ liệu!");
-//         token = null;
-//         localStorage.removeItem("misa_token");
-//         continue;
+//         break;
 //       }
 
 //       CRM_DATA = data.data;
@@ -52,47 +111,11 @@ let CRM_DATA = [];
 //       return CRM_DATA;
 //     } catch (err) {
 //       console.error(err);
-//       alert("Không lấy được dữ liệu, thử token khác");
-//       token = null;
-//       localStorage.removeItem("misa_token");
+//       alert("Không lấy được dữ liệu, thử lại sau");
+//       break;
 //     }
 //   }
 // }
-async function fetchLeads(from, to) {
-  document.querySelector(".loading").classList.add("active");
-
-  // ✅ Fix cứng token tạm thời ở đây
-  let token =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJQYXlMb2FkRGF0YSI6IjY3MzNkZTA0LWU2ZjctNDc0YS05MWNkLTM4NTRjYjgxODg4MSIsImV4cCI6MTc2MDU3NjUyMiwiaXNzIjoiTUlTQSIsImF1ZCI6IkFNSVNDUk0yIn0.yq9ELkFtKmfycEN12XLYpCkRVjpZlN2yk_b2yeTJo8o";
-
-  while (true) {
-    // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-    const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
-
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (data.error) {
-        alert("Lỗi: " + data.error);
-        break; // ❌ không cần vòng lặp nhập lại token
-      }
-
-      if (!data.data || data.data.length === 0) {
-        alert("Không có dữ liệu!");
-        break;
-      }
-
-      CRM_DATA = data.data;
-      document.querySelector(".loading").classList.remove("active");
-      return CRM_DATA;
-    } catch (err) {
-      console.error(err);
-      alert("Không lấy được dữ liệu, thử lại sau");
-      break;
-    }
-  }
-}
 
 // ----------------------------------------
 // 🧠 Hàm xử lý tag
