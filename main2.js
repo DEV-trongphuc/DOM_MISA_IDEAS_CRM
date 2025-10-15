@@ -146,16 +146,16 @@ async function getToken(username, password) {
   // 3️⃣ Nếu vẫn chưa có → gọi loginFlow với OTP
   try {
     const lData = await loginFlow(username, password);
-    if (lData?.token) {
-      return lData.token; // loginFlow đã lưu token rồi nếu dùng phiên bản UI mới
-    }
+    if (lData?.token) return lData.token;
+    throw new Error("LoginFlow không trả token");
   } catch (err) {
     console.error("LoginFlow thất bại:", err);
   }
 
   // 4️⃣ Nếu vẫn không có token → yêu cầu nhập tay
   token = prompt("Nhập token MISA:");
-  if (token) localStorage.setItem("misa_token", token);
+  if (!token) throw new Error("Người dùng không nhập token");
+  localStorage.setItem("misa_token", token);
   return token;
 }
 
