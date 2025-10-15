@@ -29,10 +29,11 @@
       <div class="dom_sidebar box_shadow flex">
         <div class="dom_logo">
           <img
-            src="https://ampersand-reports-dom.netlify.app/DOM-img/DOM_LOGO.png"
+            src="https://raw.githubusercontent.com/DEV-trongphuc/DOM_MISA_IDEAS_CRM/refs/heads/main/Coffee%20Talk%20AI%20LEARNING%20(9).png"
             alt="DOM Report Logo"
           />
         </div>
+        <p class="dom_text_menu">COMPANY VIEW</p>
         <div class="dom_account_view">
           <div class="dom_account_view_block">
             <div class="account_item">
@@ -43,7 +44,6 @@
                 />
                 <div class="account_item_info">
                   <p class="account_item_name">Total Data</p>
-                  <p class="account_item_id">VTCI + IDEAS</p>
                 </div>
               </div>
               <i class="fa-solid fa-sort"></i>
@@ -54,19 +54,19 @@
               <img
                 src="https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp"
               />
-              <p><span>VTCI</span> <span>CRM Misa</span></p>
+              <p><span>VTCI</span></p>
             </li>
             <li data-id="2">
               <img
                 src="https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp"
               />
-              <p><span>IDEAS</span> <span>CRM Misa</span></p>
+              <p><span>IDEAS</span></p>
             </li>
             <li data-id="0">
               <img
                 src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlIpztniIEN5ZYvLlwwqBvhzdodvu2NfPSbg&s"
               />
-              <p><span>Total Data</span> <span>VTCI + IDEAS</span></p>
+              <p><span>Total Data</span></p>
             </li>
           </ul>
         </div>
@@ -74,25 +74,25 @@
         <ul class="dom_menu">
           <li class="active" data-view="dashboard">
             <i class="fa-solid fa-chart-column"></i>
-            <span>CRM Dashboard</span>
+            <span>Dashboard</span>
           </li>
           <li class="" data-view="sale">
             <i class="fa-solid fa-chart-pie"></i>
-            <span>Sales Progress</span>
+            <span>Sales</span>
           </li>
           <li class="" data-view="da">
             <i class="fa-solid fa-chart-simple"></i>
-            <span>Data Analytics</span>
+            <span>Analytics</span>
           </li>
 
           <li class="" data-view="won">
             <i class="fa-solid fa-graduation-cap"></i>
-            <span>Won Lead</span>
+            <span>Won</span>
           </li>
         </ul>
       </div>
       <div class="dom_container dashboard">
-        <div class="dom_header flex box_shadow">
+        <div class="dom_header flex">
           <div class="dom_header_time">
             <div class="dom_select time">
               <div class="flex">
@@ -128,15 +128,13 @@
             </div>
             <p class="dom_date">01/06/2025 - 28/06/2025</p>
           </div>
-        </div>
-        <div class="dom_dashboard">
-          <div class="dom_row flex filter">
-            <div class="dom_inner box_shadow">
-              <div class="dom_filter">
-                <div>
-                  <i class="fa-solid fa-filter"></i>
-                  <p>Data filter</p>
-                </div>
+          <div class="dom_inner filter">
+            <div class="dom_filter">
+              <div class="toogle_filter box_shadow">
+                <i class="fa-solid fa-filter"></i>
+                <p>Data filter</p>
+              </div>
+              <div>
                 <div class="dom_select campaign">
                   <div class="flex">
                     <p class="dom_selected">All campaign</p>
@@ -194,32 +192,14 @@
               </div>
             </div>
           </div>
-
-          <div class="dom_row flex">
-            <div class="dom_inner w50 box_shadow chart">
-              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
-              <div class="chart-wrapper">
-                <canvas id="leadTagChart"></canvas>
-              </div>
-            </div>
-            <div class="dom_inner w50 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-chart-bar main_clr"></i>Source - Qualified
-              </h2>
-              <div class="dom_toplist_wrap">
-                <ul class="dom_toplist"></ul>
-              </div>
-            </div>
-          </div>
-          <div class="dom_row flex">
-            <div class="dom_inner box_shadow chart">
+        </div>
+        <div class="dom_dashboard">
+          <div class="dom_row flex um">
+            <div class="dom_inner w65 box_shadow chart">
               <div class="dom_table_filter">
                 <h2>
                   <i class="fa-solid fa-chart-line main_clr"></i> Total Lead:
                   <p id="count_lead">
-                    <i class="fa-solid fa-user"></i><span>...</span>
-                  </p>
-                  <p id="count_needed">
                     <i class="fa-solid fa-user-graduate"></i><span>...</span>
                   </p>
                 </h2>
@@ -252,8 +232,32 @@
                 <canvas id="leadTrendChart"></canvas>
               </div>
             </div>
+
+            <div class="dom_inner w35 box_shadow chart">
+              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
+              <div class="chart-wrapper">
+                <canvas id="leadTagChart"></canvas>
+              </div>
+            </div>
           </div>
           <div class="dom_row flex">
+            <div class="dom_inner w50">
+              <h2 class="button_group">
+                <p class="active btn-source">Source Detail</p>
+                <p class="btn-campaign">Campaign</p>
+                <p class="toplist_header">
+                  <span></span>
+                  <span>Total Lead</span>
+                  <span>Qualified Lead</span>
+                  <span>%Qualified</span>
+                  <span>View more</span>
+                </p>
+              </h2>
+
+              <div class="dom_toplist_wrap">
+                <ul class="dom_toplist"></ul>
+              </div>
+            </div>
             <div class="dom_inner w25 box_shadow chart">
               <h2>
                 <i class="fa-solid fa-bullseye main_clr"></i> Marketing
@@ -282,7 +286,7 @@
                 </div>
               </div>
             </div>
-            <div class="dom_inner w33 box_shadow chart">
+            <div class="dom_inner w25 box_shadow chart">
               <h2>
                 <i class="fa-solid fa-chart-pie main_clr"></i> Campaign Pie
               </h2>
@@ -290,9 +294,25 @@
                 <canvas id="pieCampaign"></canvas>
               </div>
             </div>
+          </div>
+          <div class="dom_row flex">
             <div class="dom_inner w33 box_shadow chart">
               <h2><i class="fa-solid fa-tags main_clr"></i> Frequency tag</h2>
               <div class="frequency_tag"></div>
+            </div>
+            <div class="dom_inner w33 box_shadow chart">
+              <h2>
+                <i class="fa-solid fa-tags main_clr"></i> Educational Note
+              </h2>
+              <div class="chart-wrapper">
+                <canvas id="degreeChart"></canvas>
+              </div>
+            </div>
+            <div class="dom_inner w33 box_shadow chart">
+              <h2><i class="fa-solid fa-tags main_clr"></i> Program Tag</h2>
+              <div class="chart-wrapper">
+                <canvas id="programChart"></canvas>
+              </div>
             </div>
           </div>
         </div>
