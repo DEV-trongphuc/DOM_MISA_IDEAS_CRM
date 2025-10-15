@@ -2189,13 +2189,10 @@ function renderDegreeChart(grouped) {
     "Sinh viên": 0,
     Khác: 0,
   };
-
   grouped.forEach((lead) => {
     let desc = (lead.Description || "").toLowerCase().trim();
 
-    if (/(cử[\s_]*nhân|cu[\s_]*nhan)/.test(desc)) {
-      degreeCounts["Cử nhân"]++;
-    } else if (/(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/.test(desc)) {
+    if (/(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/.test(desc)) {
       degreeCounts["Dưới cao đẳng"]++;
     } else if (/(cao[\s_]*đẳng|cao[\s_]*dang)/.test(desc)) {
       degreeCounts["Cao đẳng"]++;
@@ -2203,6 +2200,8 @@ function renderDegreeChart(grouped) {
       degreeCounts["THPT"]++;
     } else if (/(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/.test(desc)) {
       degreeCounts["Sinh viên"]++;
+    } else if (/(cử[\s_]*nhân|cu[\s_]*nhan)/.test(desc)) {
+      degreeCounts["Cử nhân"]++;
     } else if (desc !== "") {
       degreeCounts["Khác"]++;
     }
