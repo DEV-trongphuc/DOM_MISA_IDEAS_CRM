@@ -95,41 +95,33 @@ async function loginFlow(username, password) {
   return { token, refresh_token };
 }
 async function quickLogin() {
-  try {
-    const response = await fetch(
-      "https://ideas.edu.vn/login_otp.php?step=crm",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        // Nếu cần gửi body, có thể thêm ở đây:
-        // body: JSON.stringify({ username: "xxx", password: "xxx" })
-      }
-    );
+  const response = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    // Nếu cần gửi body, có thể thêm ở đây:
+    // body: JSON.stringify({ username: "xxx", password: "xxx" })
+  });
 
-    const data = await response.json();
-    console.log("Step 3 response (User Info):", data);
+  const data = await response.json();
+  console.log("Step 3 response (User Info):", data);
 
-    // Lấy token và refresh_token
-    const token = data?.Data?.token;
-    const refresh_token = data?.Data?.refresh_token;
+  // Lấy token và refresh_token
+  const token = data?.Data?.token;
+  const refresh_token = data?.Data?.refresh_token;
 
-    if (token && refresh_token) {
-      // ✅ Lưu vào localStorage
-      localStorage.setItem("misa_token", token);
-      localStorage.setItem("misa_refresh_token", refresh_token);
-      console.log("✅ Token và Refresh Token đã được lưu vào localStorage");
-    } else {
-      console.warn("⚠️ Không tìm thấy token trong phản hồi:", data);
-    }
-
-    return { token, refresh_token };
-  } catch (error) {
-    console.error("❌ Lỗi khi gọi API quickLogin:", error);
+  if (token && refresh_token) {
+    // ✅ Lưu vào localStorage
+    localStorage.setItem("misa_token", token);
+    localStorage.setItem("misa_refresh_token", refresh_token);
+    console.log("✅ Token và Refresh Token đã được lưu vào localStorage");
+  } else {
+    console.warn("⚠️ Không tìm thấy token trong phản hồi:", data);
   }
-}
 
+  return { token, refresh_token };
+}
 async function getToken(username, password) {
   // 1️⃣ Kiểm tra localStorage
   let token = localStorage.getItem("misa_token");
