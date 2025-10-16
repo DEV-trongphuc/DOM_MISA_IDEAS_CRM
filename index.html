@@ -28,8 +28,12 @@
     <section id="dom" class="flex">
       <div class="dom_sidebar box_shadow flex">
         <div class="dom_logo">
-          <img
+          <!-- <img
             src="https://raw.githubusercontent.com/DEV-trongphuc/DOM_MISA_IDEAS_CRM/refs/heads/main/Coffee%20Talk%20AI%20LEARNING%20(9).png"
+            alt="DOM Report Logo"
+          /> -->
+          <img
+            src="https://dom-marketing.netlify.app/img/DOM_LOGO.png"
             alt="DOM Report Logo"
           />
         </div>
@@ -112,8 +116,8 @@
                 </li>
                 <!-- <li data-date="last_month" class="">
                   <span class="radio_box"></span> <span>Last Month</span>
-                </li> -->
-                <!-- <li data-date="this_year" class="">
+                </li>
+                <li data-date="this_year" class="">
                   <span class="radio_box"></span> <span>This Year</span>
                 </li> -->
                 <li data-date="custom_range" class="custom_selete">
@@ -194,14 +198,86 @@
           </div>
         </div>
         <div class="dom_dashboard">
+          <div class="dom_row flex sale_report">
+            <i class="fa-solid fa-xmark sale_report_close"></i>
+            <div class="dom_select saleperson_detail">
+              <img
+                src="https://ui-avatars.com/api/?name=L%C3%AA%20%C4%90inh%20%C3%9D%20Nhi&background=3381c1&color=fff&bold=true"
+              />
+              <div class="flex">
+                <p class="dom_selected">Lê Đinh Ý Nhi</p>
+              </div>
+              <i class="fa-solid fa-angle-down"></i>
+              <ul class="dom_select_show">
+                <li data-date="today" class="">
+                  <img
+                    src="https://ui-avatars.com/api/?name=L%C3%AA%20%C4%90inh%20%C3%9D%20Nhi&background=3381c1&color=fff&bold=true"
+                  />
+                  <span>Lưu Phan Hoàng Phúc</span>
+                </li>
+                <li data-date="today" class="">
+                  <img
+                    src="https://ui-avatars.com/api/?name=L%C3%AA%20%C4%90inh%20%C3%9D%20Nhi&background=3381c1&color=fff&bold=true"
+                  />
+                  <span>Lưu Phan Hoàng Phúc</span>
+                </li>
+                <li data-date="today" class="">
+                  <img
+                    src="https://ui-avatars.com/api/?name=L%C3%AA%20%C4%90inh%20%C3%9D%20Nhi&background=3381c1&color=fff&bold=true"
+                  />
+                  <span>Lưu Phan Hoàng Phúc</span>
+                </li>
+              </ul>
+            </div>
+            <h4>
+              <i class="fa-solid fa-calendar-days"></i> Detail data:
+              <span class="sale_report_calender">1/1/2025 - 10/1/2025</span>
+            </h4>
+          </div>
           <div class="dom_row flex um">
-            <div class="dom_inner w65 box_shadow chart">
+            <div class="dom_inner w20 box_shadow chart">
+              <div class="dom_total_report">
+                <img src="./logotarget.png" />
+                <ul>
+                  <li>
+                    <span><i class="fa-solid fa-user"></i> Total Lead</span>
+                    <p id="count_lead">
+                      <span>...</span>
+                    </p>
+                  </li>
+                  <li>
+                    <span
+                      ><i class="fa-solid fa-tag main_clr"></i> No.1 Tag</span
+                    >
+                    <p id="top_tag">
+                      <span></span>
+                    </p>
+                  </li>
+                  <li>
+                    <span
+                      ><i class="fa-solid fa-tag main_clr"></i> No.1
+                      Program</span
+                    >
+                    <p id="top_program">
+                      <span></span>
+                    </p>
+                  </li>
+                  <li>
+                    <span
+                      ><i class="fa-solid fa-tag main_clr"></i> No.1
+                      Education</span
+                    >
+                    <p id="top_edu">
+                      <span></span>
+                    </p>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div class="dom_inner w33 box_shadow chart trendline">
               <div class="dom_table_filter">
                 <h2>
-                  <i class="fa-solid fa-chart-line main_clr"></i> Total Lead:
-                  <p id="count_lead">
-                    <i class="fa-solid fa-user-graduate"></i><span>...</span>
-                  </p>
+                  <i class="fa-solid fa-chart-line main_clr"></i> Trend line
                 </h2>
                 <div class="dom_select quality">
                   <i class="fa-solid fa-chart-area"></i>
@@ -344,43 +420,7 @@
               </div>
             </div> -->
           </div>
-          <div class="dom_row flex" style="margin-top: 0">
-            <div class="dom_inner box_shadow chart bgw">
-              <div class="dom_table_filter">
-                <h2>
-                  <i class="fa-solid fa-graduation-cap main_clr"></i> Saleperson
-                  Chart
-                </h2>
-                <div class="dom_select sale_quality">
-                  <i class="fa-solid fa-chart-area"></i>
-                  <div class="flex">
-                    <p class="dom_selected">Needed</p>
-                  </div>
-                  <i class="fa-solid fa-angle-down"></i>
-                  <ul class="dom_select_show">
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Considering</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Bad timing</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Unqualified</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Junk</span>
-                    </li>
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Needed</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div style="margin-top: 1.5rem">
-                <canvas id="leadSale"></canvas>
-              </div>
-            </div>
-          </div>
+
           <div class="dom_row flex">
             <div class="dom_inner w50 box_shadow chart bgw">
               <div class="dom_table_filter">
@@ -418,17 +458,54 @@
             </div>
             <div class="dom_inner w50 chart">
               <h2 class="button_group">
-                <p class="active">Top Qualified Lead</p>
+                <p class="active">Qualified Lead</p>
                 <p class="toplist_header">
                   <span></span>
                   <span>Total </span>
                   <span>Qualified </span>
                   <span>%Qualified</span>
-                  <span>View more</span>
+                  <span>Detail Data</span>
                 </p>
               </h2>
               <div class="dom_toplist_wrap">
                 <ul class="dom_toplist sale"></ul>
+              </div>
+            </div>
+          </div>
+          <div class="dom_row flex">
+            <div class="dom_inner box_shadow chart bgw">
+              <div class="dom_table_filter">
+                <h2>
+                  <i class="fa-solid fa-graduation-cap main_clr"></i> Saleperson
+                  Chart
+                </h2>
+                <div class="dom_select sale_quality">
+                  <i class="fa-solid fa-chart-area"></i>
+                  <div class="flex">
+                    <p class="dom_selected">Needed</p>
+                  </div>
+                  <i class="fa-solid fa-angle-down"></i>
+                  <ul class="dom_select_show">
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Considering</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Bad timing</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Unqualified</span>
+                    </li>
+                    <li data-date="today" class="">
+                      <span class="radio_box"></span> <span>Junk</span>
+                    </li>
+                    <li data-date="today" class="active">
+                      <span class="radio_box"></span> <span>Needed</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div style="margin-top: 1.5rem">
+                <canvas id="leadSale"></canvas>
               </div>
             </div>
           </div>
@@ -452,6 +529,7 @@
             </div>
           </div>
         </div>
+        <div class="dom_overlay"></div>
       </div>
     </section>
     <div class="dom_accounts">
