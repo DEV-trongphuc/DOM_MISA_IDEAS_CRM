@@ -68,9 +68,29 @@ body {
   background: #555555c7;
 }
 html {
-  font-size: 62.5%;
+  font-size: 62.5%; /* default 10px */
   scroll-behavior: smooth;
 }
+
+/* Laptop 14 inch ~ 1366px width */
+@media (max-width: 1400px) {
+  html {
+    font-size: 50%; /* 12px */
+  }
+}
+@media (max-width: 1700px) {
+  html {
+    font-size: 50%; /* 12px */
+  }
+}
+
+/* Laptop nhỏ hơn 1280px */
+@media (max-width: 1280px) {
+  html {
+    font-size: 50%; /* 12px */
+  }
+}
+
 /* ___________________________ */
 #dom {
   width: 100%;
@@ -153,7 +173,7 @@ html {
   margin-right: 1rem;
   transition: all 0.2s ease-in-out;
   opacity: 0.8;
-  width: 20px;
+  width: 2rem;
   color: var(--textClr);
 }
 .dom_menu li.active i {
@@ -300,7 +320,7 @@ html {
 .dom_toplist > li > p:first-child {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 1rem;
   font-size: 1.4rem;
   font-weight: 700;
   overflow: hidden;
@@ -317,8 +337,8 @@ html {
 }
 /* Avatar */
 .dom_toplist > li > p:first-child img {
-  width: 30px;
-  height: 30px;
+  width: 3rem;
+  height: 3rem;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -343,7 +363,7 @@ html {
 .toplist_percent {
   text-align: center;
   font-weight: bold;
-  padding: 5px 1rem;
+  padding: 0.5rem 1rem;
   border-radius: 50rem;
 }
 
@@ -361,7 +381,7 @@ html {
   max-height: 30rem;
 }
 .dom_toplist > li > p:first-child > span:last-child > span:last-child {
-  padding: 5px 1rem;
+  padding: 0.5rem 1rem;
   border-radius: 15px;
   font-size: 1.2rem !important;
   margin-left: 1rem;
@@ -534,7 +554,7 @@ table th {
       transparent 1px
     )
     0% 0% / 100% 100%;
-  padding: 5px;
+  padding: 0.5rem;
 }
 table tfoot {
   position: sticky;
@@ -615,7 +635,7 @@ tbody {
 }
 .custom_date > p > span {
   display: inline-block;
-  padding: 5px 1rem;
+  padding: 0.5rem 1rem;
   width: 5rem;
   border-radius: 15px;
   font-size: 1.2rem;
@@ -687,7 +707,7 @@ tbody {
 .dom_select_show .count {
   border-radius: 5px;
   font-size: 1.1rem;
-  padding: 5px 1rem;
+  padding: 0.5rem 1rem;
   font-weight: bold;
   background-color: #ffebc3;
 }
@@ -886,7 +906,7 @@ tbody {
   display: inline;
   background-color: var(--subClr);
   font-size: 1.5rem;
-  padding: 8px 1rem;
+  padding: 0.8rem 1rem;
   border-radius: 15px;
   color: var(--subClr);
   padding-right: 2rem;
@@ -939,7 +959,7 @@ tbody {
   color: var(--mainClr);
 }
 .dom_total_report > ul > li:not(:first-child) > p {
-  padding: 5px 1rem;
+  padding: 0.5rem 1rem;
   background-color: #ffaa0033;
   border-radius: 50rem;
   transform: translateX(1rem);
@@ -1019,7 +1039,7 @@ tbody {
   align-items: center;
 }
 .dom_search {
-  padding: 8px 1rem;
+  padding: 0.8rem 1rem;
   border: 1px solid var(--mainClr);
   width: 40rem;
   border-radius: 15px;
@@ -1083,7 +1103,7 @@ tbody {
   margin-top: 2rem;
 }
 .freq_tag_item {
-  padding: 8px 1.5rem;
+  padding: 0.8rem 1.5rem;
   border-radius: 50rem;
   border: 1px solid rgb(0, 0, 0, 0.2);
   box-shadow: 0 0 5px rgb(0, 0, 0, 0.1);
@@ -1096,7 +1116,7 @@ tbody {
 
 .freq_tag_item .tag_count {
   background-color: #fff1d4;
-  padding: 1px 1rem;
+  padding: 0.1rem 1rem;
   margin-left: 1rem;
   color: var(--textClr);
   font-weight: bold;
@@ -1105,9 +1125,9 @@ tbody {
 }
 .tag_chip {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 0.2rem 0.8rem;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 1.2rem;
   font-weight: 500;
 }
 .tag_chip:not(:last-child) {
@@ -1370,7 +1390,7 @@ tbody {
 }
 
 .dom_select.saleperson_detail {
-  padding: 5px 1rem;
+  padding: 0.5rem 1rem;
   border-radius: 50rem;
   min-width: 30rem;
 }
