@@ -147,8 +147,8 @@ async function fetchLeads(from, to) {
   // Lấy token 1 lần
   let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
 
-  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
+  // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+  const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
   const res = await fetch(url);
   const data = await res.json();
 
@@ -1523,9 +1523,14 @@ function renderLeadTagChart(grouped) {
 // ======================
 // 🧩 Render Toplist
 // ======================
+let ORIGINAL_DATA = null;
 function renderToplist(grouped, mode = "default") {
   const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist");
+  const dashboard = document.querySelector(".dom_dashboard");
+  const saleDetailUI = document.querySelector(".sale_report");
+  const dateUI = document.querySelector(".dom_date");
   if (!wrap || !grouped?.byCampaign) return;
+  if (!ORIGINAL_DATA) ORIGINAL_DATA = RAW_DATA;
 
   const list = [];
 
@@ -1550,6 +1555,9 @@ function renderToplist(grouped, mode = "default") {
         if (mode === "default") {
           list.push({
             key: `${campaign} - ${source} - ${medium}`,
+            campaign,
+            source,
+            medium,
             total,
             quality,
             ratio: +ratio.toFixed(1),
@@ -1563,6 +1571,7 @@ function renderToplist(grouped, mode = "default") {
         totalCampaign > 0 ? (qualityCampaign / totalCampaign) * 100 : 0;
       list.push({
         key: `${campaign}`,
+        campaign,
         total: totalCampaign,
         quality: qualityCampaign,
         ratio: +ratio.toFixed(1),
@@ -1612,13 +1621,11 @@ function renderToplist(grouped, mode = "default") {
     "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
 
   // 🚀 Render danh sách
-  for (const item of list) {
-    // 🎨 Chọn màu theo ratio
+  list.forEach((item) => {
     let barColor = "rgb(0, 177, 72)";
     if (item.ratio < 20) barColor = "rgb(225, 112, 85)";
     else if (item.ratio < 40) barColor = "rgb(255, 169, 0)";
 
-    // 🧩 Chọn logo phù hợp
     let logo = defaultLogo;
     for (const entry of logos) {
       if (entry.match.test(item.key)) {
@@ -1628,38 +1635,79 @@ function renderToplist(grouped, mode = "default") {
     }
 
     const html = `
-      <li>
-        <p>
-          <img src="${logo}" />
-          <span>${item.key}</span>
-        </p>
-        <p>
-          <i class="fa-solid fa-user"></i>
-          <span class="total_lead">${item.total}</span>
-        </p>
-        <p>
-          <i class="fa-solid fa-user-graduate"></i>
-          <span class="quality_lead">${item.quality}</span>
-        </p>
-        <p class="toplist_percent" 
-           style="color:${barColor}; background:rgba(${barColor
+      <li data-campaign="${item.campaign}" data-source="${
+      item.source || ""
+    }" data-medium="${item.medium || ""}">
+        <p><img src="${logo}" /><span>${item.key}</span></p>
+        <p><i class="fa-solid fa-user"></i><span class="total_lead">${
+          item.total
+        }</span></p>
+        <p><i class="fa-solid fa-user-graduate"></i><span class="quality_lead">${
+          item.quality
+        }</span></p>
+        <p class="toplist_percent" style="color:${barColor}; background:rgba(${barColor
       .replace("rgb(", "")
-      .replace(")", "")},0.1)">
-           ${item.ratio}%
-        </p>
-        <p class="toplist_more">
-          <i class="fa-solid fa-ellipsis"></i>
-        </p>
+      .replace(")", "")},0.1)">${item.ratio}%</p>
+        <p class="toplist_more_ads" title="Xem chi tiết ${
+          item.key
+        }"><i class="fa-solid fa-magnifying-glass-chart main_clr"></i></p>
       </li>
     `;
-
     wrap.insertAdjacentHTML("beforeend", html);
-  }
+  });
+
+  // 🔹 Click lọc theo campaign/source/medium
+  wrap.querySelectorAll(".toplist_more_ads").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const li = e.currentTarget.closest("li");
+      const campaign = li.dataset.campaign;
+      const source = li.dataset.source;
+      const medium = li.dataset.medium;
+
+      const leads = RAW_DATA.filter((l) => {
+        if (mode === "campaign") return l.CustomField13Text === campaign;
+        return (
+          l.CustomField13Text === campaign &&
+          l.CustomField14Text === source &&
+          l.CustomField15Text === medium
+        );
+      });
+
+      processAndRenderAll(leads);
+      dashboard.classList.add("sale_detail_ads");
+
+      const img = saleDetailUI.querySelector("img");
+      const pName = saleDetailUI.querySelector(".dom_selected");
+      const calender = saleDetailUI.querySelector(".sale_report_calender");
+      if (img) img.src = li.querySelector("img").src;
+      if (pName) pName.innerText = li.querySelector("span").innerText;
+      if (calender) calender.innerText = dateUI?.innerText || "";
+
+      wrap.querySelectorAll("li").forEach((l) => l.classList.remove("active"));
+      li.classList.add("active");
+    });
+  });
+
+  // 🔹 Nút quay lại (back)
 }
 
 // ======================
 // ⚙️ Nút toggle chế độ lọc
 // ======================
+document.addEventListener("click", (e) => {
+  const backBtn = e.target.closest(".sale_report .sale_report_close");
+  if (!backBtn) return;
+
+  const dashboard = document.querySelector(".dom_dashboard"); // ✅ define dashboard
+  if (!dashboard) return;
+  console.log("remove");
+
+  dashboard.classList.remove("sale_detail_ads");
+  dashboard.classList.remove("sale_detail");
+
+  if (ORIGINAL_DATA) processAndRenderAll(ORIGINAL_DATA);
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   const btnSource = document.querySelector(".button_group .btn-source");
   const btnCampaign = document.querySelector(".button_group .btn-campaign");
@@ -2809,10 +2857,6 @@ function initSaleDetailClose() {
 // gọi 1 lần khi load dashboard
 initSaleDetailClose();
 
-// ==================== renderToplistBySale ====================
-// Giữ dữ liệu gốc tạm thời (để restore)
-let ORIGINAL_DATA = null;
-
 function renderToplistBySale(grouped) {
   renderSaleDropdown();
 
@@ -2898,14 +2942,6 @@ function renderToplistBySale(grouped) {
   });
 
   // 🔹 Khi bấm nút “tắt filter” (ở phần sale_detail)
-  const backBtn = saleDetailUI.querySelector(".back_to_all");
-  if (backBtn && !backBtn.dataset.bound) {
-    backBtn.dataset.bound = "1";
-    backBtn.addEventListener("click", () => {
-      dashboard.classList.remove("sale_detail");
-      if (ORIGINAL_DATA) processAndRenderAll(ORIGINAL_DATA);
-    });
-  }
 }
 
 // 🔹 Filter sale chính xác tên clean
