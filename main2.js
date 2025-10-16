@@ -312,7 +312,11 @@ function processCRMData(data) {
     const campaign = lead.CustomField13Text || "Campaign";
     const source = lead.CustomField14Text || "Source";
     const medium = lead.CustomField15Text || "Medium";
-    const owner = lead.OwnerIDText || "No Owner";
+
+    // Lấy owner gốc
+    const ownerFull = lead.OwnerIDText || "No Owner";
+    // Làm sạch tên owner chỉ dùng cho key
+    const ownerKey = ownerFull.replace(/\s*\(NV.*?\)\s*/gi, "").trim();
 
     // === Tag Frequency ===
     for (let j = 0; j < tags.length; j++) {
@@ -332,19 +336,20 @@ function processCRMData(data) {
     const tagDateObj = (r.byTagAndDate[mainTag] ||= Object.create(null));
     (tagDateObj[date] ||= []).push(lead);
 
-    // === byCampaign (multi-level object reuse) ===
+    // === byCampaign ===
     const campObj = (r.byCampaign[campaign] ||= Object.create(null));
     const sourceObj = (campObj[source] ||= Object.create(null));
     (sourceObj[medium] ||= []).push(lead);
 
-    // === byOwner ===
-    const ownerObj = (r.byOwner[owner] ||= {
+    // === byOwner (chỉ dùng ownerKey cho key) ===
+    const ownerObj = (r.byOwner[ownerKey] ||= {
       total: 0,
       tags: Object.create(null),
       leads: [],
     });
     ownerObj.total++;
     ownerObj.leads.push(lead);
+
     const ownerTagObj = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
     ownerTagObj.count++;
     ownerTagObj.leads.push(lead);
@@ -358,13 +363,14 @@ function processCRMData(data) {
     });
     orgObj.total++;
     (orgObj.tags[mainTag] ||= []).push(lead);
-    (orgObj.owners[owner] ||= []).push(lead);
+    (orgObj.owners[ownerKey] ||= []).push(lead); // key sạch
     (orgObj.byDate[date] ||= []).push(lead);
   }
 
   setTimeout(() => {
     if (loadingEl) loadingEl.classList.remove("active");
   }, 300);
+
   return r;
 }
 
@@ -1663,15 +1669,19 @@ function renderToplist(grouped, mode = "default") {
       const campaign = li.dataset.campaign;
       const source = li.dataset.source;
       const medium = li.dataset.medium;
+      const leads = GROUPED.byCampaign[campaign][source][medium];
+      processAndRenderAll(leads);
+      // const leads = GROUPED[][][]
+      // .filter((l) => {
+      //   const lCampaign = l.CustomField13Text || "Campaign";
+      //   const lSource = l.CustomField14Text || "Source";
+      //   const lMedium = l.CustomField15Text || "Medium";
 
-      const leads = RAW_DATA.filter((l) => {
-        if (mode === "campaign") return l.CustomField13Text === campaign;
-        return (
-          l.CustomField13Text === campaign &&
-          l.CustomField14Text === source &&
-          l.CustomField15Text === medium
-        );
-      });
+      //   if (mode === "campaign") return lCampaign === campaign;
+      //   return (
+      //     lCampaign === campaign && lSource === source && lMedium === medium
+      //   );
+      // });
 
       processAndRenderAll(leads);
       dashboard.classList.add("sale_detail_ads");
@@ -2918,8 +2928,7 @@ function renderToplistBySale(grouped) {
       const li = e.currentTarget.closest("li");
       const saleName = li.dataset.owner;
       if (!saleName) return;
-
-      const leads = filterBySaleExact(saleName);
+      const leads = GROUPED.byOwner[saleName].leads;
       processAndRenderAll(leads);
       dashboard.classList.add("sale_detail");
 
