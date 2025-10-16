@@ -148,6 +148,7 @@ async function fetchLeads(from, to) {
   let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
 
   const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
   const res = await fetch(url);
   const data = await res.json();
 
@@ -199,97 +200,6 @@ const tagPriority = [
   "New",
   "Untag",
 ];
-function processCRMData(data) {
-  document.querySelector(".loading").classList.add("active");
-
-  const r = {
-    byDate: {},
-    byCampaign: {},
-    byOwner: {},
-    byTag: {},
-    byTagAndDate: {},
-    byOrg: {},
-    tagFrequency: {},
-  };
-
-  for (const lead of data) {
-    const date = lead.CreatedDate?.slice(0, 10) || "Unknown Date";
-    const tags = getTagsArray(lead.TagIDText);
-    let mainTag = getPrimaryTag(tags, tagPriority) || "Untag";
-    if (mainTag === "Qualified") mainTag = "Needed";
-    if (!tags.length) tags.push("Untag");
-    lead.TagMain = mainTag;
-
-    const org = lead.CustomField16Text || "Unknown Org";
-    const campaign = lead.CustomField13Text || "Unknown Campaign";
-    const source = lead.CustomField14Text || "Unknown Source";
-    const medium = lead.CustomField15Text || "Unknown Medium";
-    const owner = lead.OwnerIDText || "No Owner";
-
-    // 1️⃣ tag frequency
-    for (const tag of tags)
-      r.tagFrequency[tag] = (r.tagFrequency[tag] || 0) + 1;
-
-    // 2️⃣ byDate
-    let dateObj = r.byDate[date];
-    if (!dateObj) r.byDate[date] = dateObj = { total: 0 };
-    dateObj.total++;
-    dateObj[mainTag] = (dateObj[mainTag] || 0) + 1;
-
-    // 3️⃣ byTag
-    let tagArr = r.byTag[mainTag];
-    if (!tagArr) r.byTag[mainTag] = tagArr = [];
-    tagArr.push(lead);
-
-    // 4️⃣ byTagAndDate
-    let tagDateObj = r.byTagAndDate[mainTag];
-    if (!tagDateObj) r.byTagAndDate[mainTag] = tagDateObj = {};
-    let dateArr = tagDateObj[date];
-    if (!dateArr) tagDateObj[date] = dateArr = [];
-    dateArr.push(lead);
-
-    // 5️⃣ byCampaign
-    let campObj = r.byCampaign[campaign];
-    if (!campObj) r.byCampaign[campaign] = campObj = {};
-    let sourceObj = campObj[source];
-    if (!sourceObj) campObj[source] = sourceObj = {};
-    let mediumArr = sourceObj[medium];
-    if (!mediumArr) sourceObj[medium] = mediumArr = [];
-    mediumArr.push(lead);
-
-    // 6️⃣ byOwner
-    let ownerObj = r.byOwner[owner];
-    if (!ownerObj)
-      r.byOwner[owner] = ownerObj = { total: 0, tags: {}, leads: [] };
-    ownerObj.total++;
-    ownerObj.leads.push(lead);
-    let ownerTagObj = ownerObj.tags[mainTag];
-    if (!ownerTagObj)
-      ownerObj.tags[mainTag] = ownerTagObj = { count: 0, leads: [] };
-    ownerTagObj.count++;
-    ownerTagObj.leads.push(lead);
-
-    // 7️⃣ byOrg
-    let orgObj = r.byOrg[org];
-    if (!orgObj)
-      r.byOrg[org] = orgObj = { total: 0, tags: {}, owners: {}, byDate: {} };
-    orgObj.total++;
-    let orgTagArr = orgObj.tags[mainTag];
-    if (!orgTagArr) orgObj.tags[mainTag] = orgTagArr = [];
-    orgTagArr.push(lead);
-
-    let orgOwnerArr = orgObj.owners[owner];
-    if (!orgOwnerArr) orgObj.owners[owner] = orgOwnerArr = [];
-    orgOwnerArr.push(lead);
-
-    let orgDateArr = orgObj.byDate[date];
-    if (!orgDateArr) orgObj.byDate[date] = orgDateArr = [];
-    orgDateArr.push(lead);
-  }
-
-  document.querySelector(".loading").classList.remove("active");
-  return r;
-}
 
 // ----------------------------------------
 // 🚀 Chạy thử
@@ -316,25 +226,146 @@ async function main() {
   setupClearFilter();
   setupQualityFilter();
   setupLeadSearch();
+  setupDropdowns();
 }
 main();
 async function processAndRenderAll(data) {
-  setupDropdowns();
+  // ⚡ 1. Xử lý dữ liệu thật nhanh
   GROUPED = processCRMData(data);
   window.grouped = GROUPED;
-  renderLeadTable(data);
-  renderFilterOptions(data);
-  renderLeadTrendChart(GROUPED);
-  renderToplist(GROUPED);
-  renderToplistBySale(GROUPED);
-  renderLeadQualityMeter(GROUPED);
-  renderCampaignPieChart(GROUPED);
-  renderTagFrequency(GROUPED);
-  renderSaleFilter(GROUPED);
-  renderDegreeChart(data);
-  renderProgramChart(GROUPED);
-  renderLeadTagChart(GROUPED);
-  // renderSaleDropdown(GROUPED);
+
+  // 🧩 2. Render chart trước — nhưng chia nhỏ từng nhóm để tránh lag
+  queueMicrotask(() => renderChartsSmoothly(GROUPED, data));
+
+  // 🧱 3. Render bảng & filter sau cùng (ít ảnh hưởng hiệu năng)
+  requestAnimationFrame(() => {
+    renderLeadTable(data);
+    renderFilterOptions(data);
+    renderSaleFilter(GROUPED);
+  });
+}
+
+// 🧠 Hàm render chart chia nhỏ batch – không chặn main thread
+function renderChartsSmoothly(GROUPED, data) {
+  const chartTasks = [
+    () => renderLeadTrendChart(GROUPED),
+    () => renderToplist(GROUPED),
+    () => renderToplistBySale(GROUPED),
+    () => renderLeadQualityMeter(GROUPED),
+    () => renderCampaignPieChart(GROUPED),
+    () => renderTagFrequency(GROUPED),
+    () => renderProgramChart(GROUPED),
+    () => renderLeadTagChart(GROUPED),
+    () => renderDegreeChart(data),
+  ];
+
+  let delay = 0;
+
+  // ⚙️ render rải rác từng chart 1
+  for (const task of chartTasks) {
+    setTimeout(() => {
+      // Chạy chart trong thời điểm idle nếu có
+      if ("requestIdleCallback" in window) {
+        requestIdleCallback(() => task());
+      } else {
+        requestAnimationFrame(() => task());
+      }
+    }, delay);
+    delay += 50; // mỗi chart cách nhau 50ms giúp UI không lag
+  }
+}
+
+function processCRMData(data) {
+  const loadingEl = document.querySelector(".loading");
+  if (loadingEl) loadingEl.classList.add("active");
+
+  const r = {
+    byDate: Object.create(null),
+    byCampaign: Object.create(null),
+    byOwner: Object.create(null),
+    byTag: Object.create(null),
+    byTagAndDate: Object.create(null),
+    byOrg: Object.create(null),
+    tagFrequency: Object.create(null),
+  };
+
+  const len = data.length;
+  const tagPriorityLocal = tagPriority || [];
+
+  // Giảm overhead của function call
+  const getTagsArrayLocal = getTagsArray;
+  const getPrimaryTagLocal = getPrimaryTag;
+
+  for (let i = 0; i < len; i++) {
+    const lead = data[i];
+
+    // Cache thuộc tính, tránh truy cập object lặp lại
+    const created = lead.CreatedDate;
+    const date = created ? created.slice(0, 10) : "Date";
+    const tags = getTagsArrayLocal(lead.TagIDText);
+    let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
+    if (mainTag === "Qualified") mainTag = "Needed";
+    if (!tags.length) tags.push("Untag");
+    lead.TagMain = mainTag;
+
+    const org = lead.CustomField16Text || "Org";
+    const campaign = lead.CustomField13Text || "Campaign";
+    const source = lead.CustomField14Text || "Source";
+    const medium = lead.CustomField15Text || "Medium";
+    const owner = lead.OwnerIDText || "No Owner";
+
+    // === Tag Frequency ===
+    for (let j = 0; j < tags.length; j++) {
+      const tag = tags[j];
+      r.tagFrequency[tag] = (r.tagFrequency[tag] || 0) + 1;
+    }
+
+    // === byDate ===
+    const dateObj = (r.byDate[date] ||= { total: 0 });
+    dateObj.total++;
+    dateObj[mainTag] = (dateObj[mainTag] || 0) + 1;
+
+    // === byTag ===
+    (r.byTag[mainTag] ||= []).push(lead);
+
+    // === byTagAndDate ===
+    const tagDateObj = (r.byTagAndDate[mainTag] ||= Object.create(null));
+    (tagDateObj[date] ||= []).push(lead);
+
+    // === byCampaign (multi-level object reuse) ===
+    const campObj = (r.byCampaign[campaign] ||= Object.create(null));
+    const sourceObj = (campObj[source] ||= Object.create(null));
+    (sourceObj[medium] ||= []).push(lead);
+
+    // === byOwner ===
+    const ownerObj = (r.byOwner[owner] ||= {
+      total: 0,
+      tags: Object.create(null),
+      leads: [],
+    });
+    ownerObj.total++;
+    ownerObj.leads.push(lead);
+    const ownerTagObj = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
+    ownerTagObj.count++;
+    ownerTagObj.leads.push(lead);
+
+    // === byOrg ===
+    const orgObj = (r.byOrg[org] ||= {
+      total: 0,
+      tags: Object.create(null),
+      owners: Object.create(null),
+      byDate: Object.create(null),
+    });
+    orgObj.total++;
+    (orgObj.tags[mainTag] ||= []).push(lead);
+    (orgObj.owners[owner] ||= []).push(lead);
+    (orgObj.byDate[date] ||= []).push(lead);
+  }
+
+  setTimeout(() => {
+    if (loadingEl) loadingEl.classList.remove("active");
+  }, 300);
+  return r;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -702,29 +733,28 @@ function setupLeadSearch() {
 
 function setupLeadTagChartBySale(grouped) {
   const selectWrap = document.querySelector(".dom_select.sale_tag_chart");
+  if (!selectWrap) return;
+
   const dropdown = selectWrap.querySelector(".dom_select_show");
   const selected = selectWrap.querySelector(".dom_selected");
   const searchInput = document.querySelector(".dom_search");
-
   if (!grouped?.byOwner) return;
 
   // 🧮 Danh sách sale (ẩn mã NV)
   const sales = Object.keys(grouped.byOwner).map((n) =>
     n.replace(/\s*\(NV.*?\)/gi, "").trim()
   );
-
-  // 🟢 Mặc định: sale đầu tiên
   const defaultSale = sales[0];
 
   // 🧹 Render danh sách sale
   dropdown.innerHTML = sales
     .map(
       (s) => `
-          <li class="${s === defaultSale ? "active" : ""}">
-            <span class="radio_box ${s === defaultSale ? "active" : ""}"></span>
-            <span>${s}</span>
-          </li>
-        `
+      <li class="${s === defaultSale ? "active" : ""}">
+        <span class="radio_box ${s === defaultSale ? "active" : ""}"></span>
+        <span>${s}</span>
+      </li>
+    `
     )
     .join("");
 
@@ -734,16 +764,25 @@ function setupLeadTagChartBySale(grouped) {
 
   // 🟡 Toggle dropdown
   const toggle = selectWrap.querySelector(".flex");
-  toggle.onclick = (e) => {
-    e.stopPropagation();
-    dropdown.classList.toggle("active");
-  };
-
-  // 🟢 Chọn sale khác
-  dropdown.querySelectorAll("li").forEach((li) => {
-    li.onclick = (e) => {
+  if (!toggle.dataset.bound) {
+    toggle.dataset.bound = "1";
+    toggle.addEventListener("click", (e) => {
       e.stopPropagation();
+      document.querySelectorAll(".dom_select_show.active").forEach((u) => {
+        if (u !== dropdown) u.classList.remove("active");
+      });
+      dropdown.classList.toggle("active");
+    });
+  }
 
+  // ✅ Dùng event delegation (1 listener duy nhất)
+  if (!dropdown.dataset.bound) {
+    dropdown.dataset.bound = "1";
+    dropdown.addEventListener("click", (e) => {
+      const li = e.target.closest("li");
+      if (!li) return;
+
+      // Bỏ active cũ
       dropdown
         .querySelectorAll("li")
         .forEach((el) => el.classList.remove("active"));
@@ -751,21 +790,17 @@ function setupLeadTagChartBySale(grouped) {
         .querySelectorAll(".radio_box")
         .forEach((r) => r.classList.remove("active"));
 
+      // Active mới
       li.classList.add("active");
       li.querySelector(".radio_box").classList.add("active");
 
       const saleName = li.querySelector("span:nth-child(2)").textContent.trim();
       selected.textContent = saleName;
 
-      // ✅ Cập nhật biểu đồ
+      // Cập nhật biểu đồ + bảng
       renderLeadTagChartBySale(grouped, saleName);
 
-      // ✅ Gán tên sale vào ô input
-      if (searchInput) {
-        searchInput.value = saleName;
-      }
-
-      // ✅ Lọc dữ liệu theo tên sale và render lại bảng
+      if (searchInput) searchInput.value = saleName;
       const filtered = RAW_DATA.filter((lead) => {
         const owner = lead.OwnerIDText?.toLowerCase() || "";
         return owner.includes(saleName.toLowerCase());
@@ -773,22 +808,25 @@ function setupLeadTagChartBySale(grouped) {
       renderLeadTable(filtered);
 
       dropdown.classList.remove("active");
-    };
-  });
+    });
+  }
 
-  // 🔹 Click ngoài để đóng
-  document.addEventListener("click", (e) => {
-    if (!selectWrap.contains(e.target)) dropdown.classList.remove("active");
-  });
+  // 🔹 Click ngoài để đóng (gán 1 lần duy nhất)
+  if (!document._saleTagOutside) {
+    document.addEventListener("click", (e) => {
+      if (!selectWrap.contains(e.target)) dropdown.classList.remove("active");
+    });
+    document._saleTagOutside = true;
+  }
 }
 
 function renderLeadTagChartBySale(grouped, saleName) {
   const ctx = document.getElementById("leadTagChartbySale");
   if (!ctx) return;
 
-  // 🔍 Tìm đúng sale
+  // 🔍 Tìm sale tương ứng nhanh hơn (dùng cache tên đã cắt)
   const matchedKey = Object.keys(grouped.byOwner).find(
-    (key) => key.replace(/\s*\(NV.*?\)/gi, "").trim() === saleName
+    (k) => k.replace(/\s*\(NV.*?\)/gi, "").trim() === saleName
   );
   const ownerData = grouped.byOwner[matchedKey];
   if (!ownerData) return;
@@ -804,43 +842,52 @@ function renderLeadTagChartBySale(grouped, saleName) {
     "Untag",
   ];
 
-  // 🧮 Lấy tag & số lượng theo thứ tự cố định
-  const ordered = tagOrder
-    .map((tag) => ({
-      label: tag,
-      value: ownerData.tags?.[tag]?.count || 0,
-    }))
-    .filter((d) => d.value > 0);
+  // 🧮 Chuẩn bị dữ liệu gọn, không map/filter lồng nhau
+  const labels = [];
+  const values = [];
+  for (let i = 0; i < tagOrder.length; i++) {
+    const tag = tagOrder[i];
+    const count = ownerData.tags?.[tag]?.count || 0;
+    if (count > 0) {
+      labels.push(tag);
+      values.push(count);
+    }
+  }
 
-  const filteredLabels = ordered.map((d) => d.label);
-  const filteredValues = ordered.map((d) => d.value);
+  const maxValue = Math.max(...values);
+  const barColors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
 
-  // 🎨 Màu vàng cho cao nhất, còn lại xám
-  const maxValue = Math.max(...filteredValues);
-  const barColors = filteredValues.map((v) =>
-    v === maxValue ? "#ffa900" : "#d9d9d9"
-  );
-
-  // 🔄 Update chart nếu có
+  // 🔧 Nếu chart đã có → chỉ update khi data khác
   if (window.leadTagChartBySaleInstance) {
     const chart = window.leadTagChartBySaleInstance;
-    chart.data.labels = filteredLabels;
-    chart.data.datasets[0].data = filteredValues;
-    chart.data.datasets[0].backgroundColor = barColors;
-    chart.data.datasets[0].label = `Leads by Tag (${saleName})`;
-    chart.update("active");
+    const ds = chart.data.datasets[0];
+
+    // So sánh nhanh → nếu không đổi thì khỏi update
+    if (
+      arraysEqual(chart.data.labels, labels) &&
+      arraysEqual(ds.data, values)
+    ) {
+      return;
+    }
+
+    chart.data.labels = labels;
+    ds.data = values;
+    ds.backgroundColor = barColors;
+    ds.borderColor = barColors;
+    ds.label = `Leads by Tag (${saleName})`;
+    chart.update("active"); // ⚡ update không animation
     return;
   }
 
-  // 🚀 Tạo chart mới
+  // 🚀 Tạo chart lần đầu (animation cực nhẹ)
   window.leadTagChartBySaleInstance = new Chart(ctx, {
     type: "bar",
     data: {
-      labels: filteredLabels,
+      labels,
       datasets: [
         {
           label: `Leads by Tag (${saleName})`,
-          data: filteredValues,
+          data: values,
           backgroundColor: barColors,
           borderColor: barColors,
           borderWidth: 1,
@@ -853,7 +900,7 @@ function renderLeadTagChartBySale(grouped, saleName) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 900, easing: "easeOutQuart" },
+      animation: { duration: 300, easing: "easeOutQuad" }, // ⚙️ mượt nhẹ mà vẫn nhanh
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -884,7 +931,7 @@ function renderLeadTagChartBySale(grouped, saleName) {
           ticks: {
             font: { size: 11 },
             color: "rgb(102, 102, 102)",
-            stepSize: Math.ceil(Math.max(...filteredValues) / 4) || 1,
+            stepSize: Math.ceil(maxValue / 4) || 1,
             callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
           },
           afterDataLimits: (scale) => (scale.max *= 1.1),
@@ -894,13 +941,20 @@ function renderLeadTagChartBySale(grouped, saleName) {
     },
     plugins: [ChartDataLabels],
   });
+
+  // ⚙️ So sánh mảng nhanh
+  function arraysEqual(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
 }
 
 function filterLeadsBySelection(data) {
   return data.filter((lead) => {
-    const campaign = lead.CustomField13Text || "Unknown Campaign";
-    const source = lead.CustomField14Text || "Unknown Source";
-    const medium = lead.CustomField15Text || "Unknown Medium";
+    const campaign = lead.CustomField13Text || "Campaign";
+    const source = lead.CustomField14Text || "Source";
+    const medium = lead.CustomField15Text || "Medium";
 
     if (currentFilter.campaign && currentFilter.campaign !== campaign)
       return false;
@@ -1271,66 +1325,137 @@ function setupTimeDropdown() {
     if (!timeSelect.contains(e.target)) list.classList.remove("active");
   });
 }
-
 function setupDropdowns() {
-  const selects = document.querySelectorAll(
-    ".dom_select:not(.time)" // ⚠️ loại trừ time dropdown
-  );
+  // ✅ các selector tái sử dụng
+  const showSelectors =
+    ".dom_select.saleperson_detail .dom_select_show, .dom_select.campaign .dom_select_show, .dom_select.source .dom_select_show, .dom_select.medium .dom_select_show";
+  const containerSelectors =
+    ".dom_select.saleperson_detail, .dom_select.campaign, .dom_select.source, .dom_select.medium";
+  const activeGroupSelectors =
+    ".dom_select.saleperson_detail .dom_select_show.active, .dom_select.campaign .dom_select_show.active, .dom_select.source .dom_select_show.active, .dom_select.medium .dom_select_show.active";
+  const itemSelectors =
+    ".dom_select.saleperson_detail .dom_select_show li, .dom_select.campaign .dom_select_show li, .dom_select.source .dom_select_show li, .dom_select.medium .dom_select_show li";
+
+  // 🔹 Đóng tất cả dropdown show trong nhóm
+  document
+    .querySelectorAll(showSelectors)
+    .forEach((u) => u.classList.remove("active"));
+
+  // 🔹 Chỉ chọn đúng các dropdown container cần setup
+  const selects = document.querySelectorAll(containerSelectors);
+
+  // flag tạm khi vừa chọn item
+  let justSelected = false;
 
   selects.forEach((sel) => {
     const toggle = sel.querySelector(".flex");
     const list = sel.querySelector(".dom_select_show");
-
     if (!toggle || !list) return;
 
-    toggle.onclick = (e) => {
+    // ⛔ Chặn gán trùng listener trên toggle
+    if (toggle.dataset.dropdownBound) return;
+    toggle.dataset.dropdownBound = "1";
+
+    toggle.addEventListener("click", (e) => {
       e.stopPropagation();
 
-      // Đóng các dropdown khác
-      document.querySelectorAll(".dom_select_show").forEach((u) => {
+      // Nếu vừa chọn item thì bỏ qua (tránh bật lại)
+      if (justSelected) return;
+
+      // 🔹 Đóng dropdown khác trong nhóm
+      document.querySelectorAll(activeGroupSelectors).forEach((u) => {
         if (u !== list) u.classList.remove("active");
       });
 
-      // Toggle dropdown hiện tại
+      // 🔹 Mở/tắt dropdown hiện tại
       list.classList.toggle("active");
-    };
+    });
   });
 
-  // 🔹 Đóng tất cả khi click ngoài
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".dom_select")) {
-      document
-        .querySelectorAll(".dom_select_show")
-        .forEach((u) => u.classList.remove("active"));
-    }
-  });
+  // 🔹 Global click (chỉ bind 1 lần)
+  if (!window.__dropdownGlobalBound) {
+    window.__dropdownGlobalBound = true;
+
+    document.addEventListener("click", (e) => {
+      // Nếu vừa chọn item thì bỏ qua (tránh bật lại)
+      if (justSelected) return;
+
+      const clickedItem = e.target.closest(itemSelectors);
+
+      if (clickedItem) {
+        // Mark và reset sau 200ms để tránh race với toggle
+        justSelected = true;
+        setTimeout(() => (justSelected = false), 200);
+
+        // Đóng tất cả dropdown active trong nhóm
+        document
+          .querySelectorAll(activeGroupSelectors)
+          .forEach((u) => u.classList.remove("active"));
+        return;
+      }
+
+      // Nếu click ngoài nhóm dropdown -> đóng hết trong nhóm
+      if (!e.target.closest(containerSelectors)) {
+        document
+          .querySelectorAll(activeGroupSelectors)
+          .forEach((u) => u.classList.remove("active"));
+      }
+    });
+  }
 }
 
 function renderLeadTagChart(grouped) {
   const ctx = document.getElementById("leadTagChart");
   const top_tag = document.getElementById("top_tag");
-  if (!ctx) return;
+  if (!ctx || !grouped?.byTag) return;
 
-  const labels = Object.keys(grouped.byTag);
-  const values = labels.map((tag) => grouped.byTag[tag].length);
-  const barColors = labels.map(() => "rgba(255, 162, 0, 0.9)");
+  // ⚙️ Gom dữ liệu siêu nhanh (cache & tránh tính thừa)
+  const entries = Object.entries(grouped.byTag);
+  if (!entries.length) return;
 
-  // 🔹 Gán label có giá trị lớn nhất vào top_tag
-  if (top_tag && values.length) {
-    const maxIndex = values.indexOf(Math.max(...values));
-    top_tag.innerText = labels[maxIndex] || "";
+  const labels = [];
+  const values = [];
+  let maxIndex = 0;
+  let maxValue = 0;
+
+  for (let i = 0; i < entries.length; i++) {
+    const [tag, arr] = entries[i];
+    const count = arr.length;
+    labels.push(tag);
+    values.push(count);
+    if (count > maxValue) {
+      maxValue = count;
+      maxIndex = i;
+    }
   }
 
-  // Nếu chart đã tồn tại → chỉ update data
-  if (window.leadTagChartInstance) {
-    const chart = window.leadTagChartInstance;
+  // 🎨 Tô màu: cột lớn nhất vàng
+  const barColors = new Array(values.length).fill("#d9d9d9");
+  barColors[maxIndex] = "#ffa900";
+
+  // 🏷️ Gán top tag nhanh
+  if (top_tag) top_tag.textContent = labels[maxIndex] || "";
+
+  // ⚡ Nếu chart đã tồn tại → chỉ update khi data khác
+  const chart = window.leadTagChartInstance;
+  if (chart) {
+    const oldData = chart.data.datasets[0].data;
+    // tránh re-render vô ích
+    if (
+      oldData.length === values.length &&
+      oldData.every((v, i) => v === values[i])
+    )
+      return;
+
     chart.data.labels = labels;
     chart.data.datasets[0].data = values;
-    chart.update("active");
+    chart.data.datasets[0].backgroundColor = barColors;
+    chart.data.datasets[0].borderColor = barColors;
+    chart.update();
     return;
   }
 
-  // Nếu chưa có chart → tạo mới
+  // 🚀 Tạo chart mới
   window.leadTagChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
@@ -1349,10 +1474,13 @@ function renderLeadTagChart(grouped) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+
+      // ⚡ Animation cực nhanh
       animation: {
-        duration: 900,
-        easing: "easeOutQuart",
+        duration: 400,
+        easing: "easeOutCubic",
       },
+
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1363,23 +1491,14 @@ function renderLeadTagChart(grouped) {
         datalabels: {
           anchor: "end",
           align: "end",
-          font: {
-            weight: "bold",
-            size: 12,
-          },
+          font: { weight: "bold", size: 12 },
           formatter: (v) => (v > 0 ? v : ""),
-          animation: {
-            duration: 500,
-            easing: "easeOutBack",
-          },
         },
       },
       scales: {
         x: {
           grid: {
-            display: true,
-            color: "rgba(0, 0, 0, 0.05)",
-            drawTicks: false,
+            display: false,
             drawBorder: false,
           },
           ticks: { font: { size: 12 }, color: "#555" },
@@ -1389,11 +1508,11 @@ function renderLeadTagChart(grouped) {
           ticks: {
             font: { size: 11 },
             color: "#666",
-            stepSize: Math.ceil(Math.max(...values) / 4) || 1,
+            stepSize: Math.ceil(maxValue / 4) || 1,
             callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
           },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
-          grid: { color: "rgba(0, 0, 0, 0.05)" },
+          afterDataLimits: (scale) => (scale.max *= 1.05),
+          grid: { color: "rgba(0,0,0,0.04)" },
         },
       },
     },
@@ -1568,18 +1687,27 @@ function setupSaleQualityDropdown(grouped) {
   const list = select.querySelector(".dom_select_show");
   const toggle = select.querySelector(".flex");
 
-  // Toggle mở dropdown
-  toggle.onclick = (e) => {
-    e.stopPropagation();
-    document.querySelectorAll(".dom_select_show").forEach((u) => {
-      if (u !== list) u.classList.remove("active");
+  // ⚙️ Gán toggle 1 lần duy nhất
+  if (!toggle.dataset.bound) {
+    toggle.dataset.bound = "1";
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.querySelectorAll(".dom_select_show.active").forEach((u) => {
+        if (u !== list) u.classList.remove("active");
+      });
+      list.classList.toggle("active");
     });
-    list.classList.toggle("active");
-  };
+  }
 
-  // Click chọn tag
+  // 🧹 Clear listener cũ
   list.querySelectorAll("li").forEach((li) => {
-    li.onclick = (e) => {
+    const newLi = li.cloneNode(true);
+    li.parentNode.replaceChild(newLi, li);
+  });
+
+  // 🟢 Gán click chọn
+  list.querySelectorAll("li").forEach((li) => {
+    li.addEventListener("click", (e) => {
       e.stopPropagation();
       const tag = li.querySelector("span:nth-child(2)").textContent.trim();
 
@@ -1600,13 +1728,16 @@ function setupSaleQualityDropdown(grouped) {
 
       // Đóng dropdown
       list.classList.remove("active");
-    };
+    });
   });
 
-  // Đóng khi click ra ngoài
-  document.addEventListener("click", (e) => {
-    if (!select.contains(e.target)) list.classList.remove("active");
-  });
+  // 🔹 Đóng khi click ngoài (gán 1 lần duy nhất)
+  if (!document._saleQualityOutside) {
+    document.addEventListener("click", (e) => {
+      if (!select.contains(e.target)) list.classList.remove("active");
+    });
+    document._saleQualityOutside = true;
+  }
 }
 
 function renderCampaignPieChart(grouped) {
@@ -1730,41 +1861,58 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
   const ctx = document.getElementById("leadSale");
   if (!ctx) return;
 
-  // 🧮 Chuẩn bị dữ liệu
-  const labels = [];
-  const totalCounts = [];
-  const tagCounts = [];
+  // 🧮 Chuẩn bị dữ liệu (dùng mảng tĩnh, tránh push nhiều lần)
+  const entries = Object.entries(grouped.byOwner);
+  const labels = new Array(entries.length);
+  const totalCounts = new Array(entries.length);
+  const tagCounts = new Array(entries.length);
 
-  Object.entries(grouped.byOwner).forEach(([owner, ownerData]) => {
-    const total = ownerData.total || 0;
-    const tagCount = ownerData.tags?.[tagFilter]?.count || 0;
+  for (let i = 0; i < entries.length; i++) {
+    const [owner, ownerData] = entries[i];
+    labels[i] = owner.replace(/\s*\(NV.*?\)/gi, "").trim();
+    totalCounts[i] = ownerData.total || 0;
+    tagCounts[i] = ownerData.tags?.[tagFilter]?.count || 0;
+  }
 
-    // ✂️ Cắt bỏ phần mã (VD: "Nguyễn Thị Linh Đan (NV0211)" -> "Nguyễn Thị Linh Đan")
-    const cleanName = owner.replace(/\s*\(NV.*?\)/gi, "").trim();
-    labels.push(cleanName);
-
-    totalCounts.push(total);
-    tagCounts.push(tagCount);
-  });
-
+  const maxValue = Math.max(...totalCounts, ...tagCounts);
   const ctx2d = ctx.getContext("2d");
 
-  // 🎨 Màu sắc
-  const tagColor = "rgba(38, 42, 83, 0.8)"; // Xanh đậm
-  const totalColor = "rgba(255, 171, 0, 0.8)"; // Vàng
-  // 🔄 Nếu chart đã có sẵn → update animation
+  const tagColor = "rgba(38, 42, 83, 0.8)";
+  const totalColor = "rgba(255, 171, 0, 0.8)";
+
+  // 🔁 Nếu chart đã có → update nhanh, không re-render toàn bộ
   if (window.leadSaleChartInstance) {
     const chart = window.leadSaleChartInstance;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = totalCounts;
-    chart.data.datasets[1].data = tagCounts;
-    chart.data.datasets[1].label = `${tagFilter} Leads`;
-    chart.update();
+    const ds0 = chart.data.datasets[0];
+    const ds1 = chart.data.datasets[1];
+
+    // ✅ Chỉ cập nhật nếu dữ liệu thay đổi (tránh trigger animation vô ích)
+    let changed = false;
+    if (
+      chart.data.labels.length !== labels.length ||
+      chart.data.labels.some((l, i) => l !== labels[i])
+    ) {
+      chart.data.labels = labels;
+      changed = true;
+    }
+    if (!arraysEqual(ds0.data, totalCounts)) {
+      ds0.data = totalCounts;
+      changed = true;
+    }
+    if (!arraysEqual(ds1.data, tagCounts)) {
+      ds1.data = tagCounts;
+      ds1.label = `${tagFilter} Leads`;
+      changed = true;
+    }
+
+    if (changed) {
+      // 🚀 Tắt animation khi update để tăng tốc
+      chart.update("active");
+    }
     return;
   }
-  const maxValue = Math.max(...totalCounts, ...tagCounts);
-  const step = Math.ceil(maxValue / 5); // ⚙️ chia trục Y thành khoảng 5 đoạn
-  // 🚀 Tạo chart mới
+
+  // 🚀 Tạo chart lần đầu
   window.leadSaleChartInstance = new Chart(ctx2d, {
     type: "bar",
     data: {
@@ -1791,7 +1939,8 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: "index" },
+      animation: false, // ⚙️ tắt animation khởi tạo → load cực nhanh
+      interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { position: "top", align: "end" },
         tooltip: {
@@ -1809,15 +1958,8 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
         datalabels: {
           anchor: "end",
           align: "end",
-          font: {
-            weight: "bold",
-            size: 12,
-          },
+          font: { weight: "bold", size: 12 },
           formatter: (v) => (v > 0 ? v : ""),
-          animation: {
-            duration: 500,
-            easing: "easeOutBack",
-          },
         },
       },
       scales: {
@@ -1825,10 +1967,8 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
           grid: { color: "rgba(0,0,0,0.05)" },
           ticks: {
             color: "#444",
-            maxRotation: 0,
-            minRotation: 0,
             autoSkip: true,
-            maxTicksLimit: 8, // ⚙️ Giới hạn tối đa số sale hiển thị
+            maxTicksLimit: 8,
           },
         },
         y: {
@@ -1836,17 +1976,21 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
           grid: { color: "rgba(0,0,0,0.05)" },
           ticks: {
             color: "#666",
-            stepSize:
-              Math.ceil(Math.max(...totalCounts, ...tagCounts) / 4) || 1,
+            stepSize: Math.ceil(maxValue / 4) || 1,
           },
-          afterDataLimits: (scale) => {
-            scale.max *= 1.1; // tăng 10%
-          },
+          afterDataLimits: (scale) => (scale.max *= 1.1),
         },
       },
     },
     plugins: [ChartDataLabels],
   });
+
+  // 🔧 Hàm so sánh mảng nhanh
+  function arraysEqual(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
 }
 
 function maskEmail(email) {
@@ -1863,15 +2007,126 @@ function maskMobile(mobile) {
   return "*".repeat(Math.max(0, mobile.length - 4)) + last4;
 }
 
+// function renderLeadTable(leads) {
+//   const container = document.querySelector(".dom_table_box");
+//   if (!container) return;
+
+//   if (!Array.isArray(leads) || leads.length === 0) {
+//     container.innerHTML = `
+//         <div class="dom_table_container empty">
+//           <p>Không có dữ liệu để hiển thị</p>
+//         </div>`;
+//     return;
+//   }
+
+//   const headers = [
+//     "Created Date",
+//     "Lead Name",
+//     "Email",
+//     "Mobile",
+//     "Owner",
+//     "Tags",
+//     "Campaign",
+//     "Source",
+//     "Medium",
+//     "Organization",
+//     "Description",
+//   ];
+
+//   const rowsHtml = leads
+//     .map((lead, i) => {
+//       const {
+//         CreatedDate,
+//         LeadName,
+//         Email,
+//         Mobile,
+//         OwnerIDText,
+//         TagIDText,
+//         CustomField13Text,
+//         CustomField14Text,
+//         CustomField15Text,
+//         CustomField16Text,
+//         Description,
+//       } = lead;
+
+//       const date = CreatedDate
+//         ? new Date(CreatedDate).toLocaleDateString("vi-VN")
+//         : "-";
+
+//       // 🏷️ Tags
+//       let tagHtml = "-";
+//       if (TagIDText && TagIDText.trim() !== "") {
+//         const tags = TagIDText.split(",")
+//           .map((t) => t.trim())
+//           .filter(Boolean);
+//         tagHtml = tags
+//           .map((tag) => {
+//             let tagClass = "";
+//             if (tag.includes("Needed")) tagClass = "tag_needed";
+//             else if (tag.includes("Considering")) tagClass = "tag_considering";
+//             else if (tag.includes("Bad timing")) tagClass = "tag_bad";
+//             else if (tag.includes("Unqualified")) tagClass = "tag_unqualified";
+//             else if (tag.includes("Junk")) tagClass = "tag_junk";
+//             else tagClass = "tag_other";
+//             return `<span class="tag_chip ${tagClass}">${tag}</span>`;
+//           })
+//           .join(" ");
+//       }
+
+//       return `
+//           <tr data-id="${i}">
+//             <td>${date}</td>
+//             <td>${LeadName || "-"}</td>
+//             <td>${maskEmail(Email)}</td>
+//             <td><i class="fa-solid fa-phone table_phone"></i> ${maskMobile(
+//               Mobile
+//             )}</td>
+//             <td>${OwnerIDText.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
+//             <td>${tagHtml}</td>
+//             <td>${CustomField13Text || "-"}</td>
+//             <td>${CustomField14Text || "-"}</td>
+//             <td>${CustomField15Text || "-"}</td>
+//             <td>${CustomField16Text || "-"}</td>
+//             <td>${Description || "-"}</td>
+//           </tr>
+//         `;
+//     })
+//     .join("");
+
+//   const footer = `
+//       <tfoot>
+//         <tr>
+//           <td colspan="3">
+//             <strong>Total: ${leads.length.toLocaleString("en-US")} lead${
+//     leads.length > 1 ? "s" : ""
+//   }</strong>
+//           </td>
+//           <td colspan="${headers.length - 3}"></td>
+//         </tr>
+//       </tfoot>
+//     `;
+
+//   container.innerHTML = `
+//       <div class="dom_table_container">
+//         <table id="main_table">
+//           <thead>
+//             <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
+//           </thead>
+//           <tbody>${rowsHtml}</tbody>
+//           ${footer}
+//         </table>
+//       </div>
+//     `;
+// }
 function renderLeadTable(leads) {
   const container = document.querySelector(".dom_table_box");
   if (!container) return;
 
   if (!Array.isArray(leads) || leads.length === 0) {
     container.innerHTML = `
-        <div class="dom_table_container empty">
-          <p>Không có dữ liệu để hiển thị</p>
-        </div>`;
+      <div class="dom_table_container empty">
+        <p>Không có dữ liệu để hiển thị</p>
+      </div>`;
     return;
   }
 
@@ -1889,8 +2144,33 @@ function renderLeadTable(leads) {
     "Description",
   ];
 
-  const rowsHtml = leads
-    .map((lead, i) => {
+  // 🧱 Khởi tạo bảng cơ bản trước (để user thấy khung nhanh)
+  container.innerHTML = `
+    <div class="dom_table_container">
+      <table id="main_table">
+        <thead>
+          <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr><td colspan="${
+            headers.length
+          }">Đang tải ${leads.length.toLocaleString()} leads...</td></tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  const tbody = container.querySelector("tbody");
+  const tfoot = container.querySelector("tfoot");
+  let index = 0;
+  const chunk = 300; // render 300 dòng/lần
+
+  function renderChunk() {
+    const end = Math.min(index + chunk, leads.length);
+    let html = "";
+
+    for (let i = index; i < end; i++) {
+      const l = leads[i];
       const {
         CreatedDate,
         LeadName,
@@ -1903,76 +2183,77 @@ function renderLeadTable(leads) {
         CustomField15Text,
         CustomField16Text,
         Description,
-      } = lead;
+      } = l;
 
       const date = CreatedDate
         ? new Date(CreatedDate).toLocaleDateString("vi-VN")
         : "-";
 
-      // 🏷️ Tags
+      // 🏷️ Tags giữ nguyên màu + class UI
       let tagHtml = "-";
-      if (TagIDText && TagIDText.trim() !== "") {
+      if (TagIDText?.trim()) {
         const tags = TagIDText.split(",")
           .map((t) => t.trim())
           .filter(Boolean);
         tagHtml = tags
           .map((tag) => {
-            let tagClass = "";
-            if (tag.includes("Needed")) tagClass = "tag_needed";
-            else if (tag.includes("Considering")) tagClass = "tag_considering";
-            else if (tag.includes("Bad timing")) tagClass = "tag_bad";
-            else if (tag.includes("Unqualified")) tagClass = "tag_unqualified";
-            else if (tag.includes("Junk")) tagClass = "tag_junk";
-            else tagClass = "tag_other";
+            const tagClass = /Needed/i.test(tag)
+              ? "tag_needed"
+              : /Considering/i.test(tag)
+              ? "tag_considering"
+              : /Bad timing/i.test(tag)
+              ? "tag_bad"
+              : /Unqualified/i.test(tag)
+              ? "tag_unqualified"
+              : /Junk/i.test(tag)
+              ? "tag_junk"
+              : "tag_other";
             return `<span class="tag_chip ${tagClass}">${tag}</span>`;
           })
           .join(" ");
       }
 
-      return `
-          <tr data-id="${i}">
-            <td>${date}</td>
-            <td>${LeadName || "-"}</td>
-            <td>${maskEmail(Email)}</td>
-            <td><i class="fa-solid fa-phone table_phone"></i> ${maskMobile(
-              Mobile
-            )}</td>
-            <td>${OwnerIDText.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
-            <td>${tagHtml}</td>
-            <td>${CustomField13Text || "-"}</td>
-            <td>${CustomField14Text || "-"}</td>
-            <td>${CustomField15Text || "-"}</td>
-            <td>${CustomField16Text || "-"}</td>
-            <td>${Description || "-"}</td>
-          </tr>
-        `;
-    })
-    .join("");
+      html += `
+        <tr data-id="${i}">
+          <td>${date}</td>
+          <td>${LeadName || "-"}</td>
+          <td>${maskEmail(Email)}</td>
+          <td><i class="fa-solid fa-phone table_phone"></i> ${maskMobile(
+            Mobile
+          )}</td>
+          <td>${OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
+          <td>${tagHtml}</td>
+          <td>${CustomField13Text || "-"}</td>
+          <td>${CustomField14Text || "-"}</td>
+          <td>${CustomField15Text || "-"}</td>
+          <td>${CustomField16Text || "-"}</td>
+          <td>${Description || "-"}</td>
+        </tr>`;
+    }
 
-  const footer = `
-      <tfoot>
+    // ⚙️ Append 1 lần (tối ưu DOM)
+    tbody.insertAdjacentHTML("beforeend", html);
+    index = end;
+
+    if (index < leads.length) {
+      // tiếp tục render phần còn lại khi browser rảnh
+      requestIdleCallback(renderChunk);
+    } else {
+      // ✅ Cập nhật footer cuối cùng
+      tfoot.innerHTML = `
         <tr>
           <td colspan="3">
             <strong>Total: ${leads.length.toLocaleString("en-US")} lead${
-    leads.length > 1 ? "s" : ""
-  }</strong>
+        leads.length > 1 ? "s" : ""
+      }</strong>
           </td>
           <td colspan="${headers.length - 3}"></td>
-        </tr>
-      </tfoot>
-    `;
+        </tr>`;
+    }
+  }
 
-  container.innerHTML = `
-      <div class="dom_table_container">
-        <table id="main_table">
-          <thead>
-            <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-          ${footer}
-        </table>
-      </div>
-    `;
+  // bắt đầu render
+  renderChunk();
 }
 
 // ======================  CHART ======================
@@ -1981,72 +2262,83 @@ function renderTagFrequency(grouped) {
   const wrap = document.querySelector(".frequency_tag");
   if (!wrap || !grouped?.tagFrequency) return;
 
-  // Chuyển object {tag: count} → mảng và sort giảm dần
-  const list = Object.entries(grouped.tagFrequency)
-    .sort((a, b) => b[1] - a[1])
-    .filter(
-      ([tag]) =>
-        ![
-          "Needed",
-          "Considering",
-          "Bad timing",
-          "Status - Bad timing",
-          "Status - Junk",
-          "Qualified",
-          "Msc_AI UMEF",
-          "MBA UMEF",
-          "EMBA UMEF",
-          "Unqualified",
-          "Status - New",
-          "Junk",
-          "BBA",
-        ].includes(tag)
-    ); // bỏ các tag chính
+  const raw = grouped.tagFrequency;
+  const exclude = new Set([
+    "Needed",
+    "Considering",
+    "Bad timing",
+    "Status - Bad timing",
+    "Status - Junk",
+    "Qualified",
+    "Msc_AI UMEF",
+    "MBA UMEF",
+    "EMBA UMEF",
+    "Unqualified",
+    "Status - New",
+    "Junk",
+    "BBA",
+  ]);
 
-  // 🧹 Xóa nội dung cũ
-  wrap.innerHTML = "";
+  // ✅ Tạo list và sort nhanh (chỉ 1 lần)
+  const list = Object.entries(raw)
+    .filter(([tag]) => !exclude.has(tag))
+    .sort((a, b) => b[1] - a[1]);
 
-  // Không có tag phụ thì hiển thị rỗng
-  if (list.length === 0) {
+  // ✅ Clear nhanh gọn (tránh .innerHTML="" nhiều lần)
+  wrap.textContent = "";
+
+  // ⛔ Không có tag phụ
+  if (!list.length) {
     wrap.innerHTML = `<p class="no_tag">Không có tag phụ nào</p>`;
     return;
   }
 
-  // 🎨 Bảng màu chủ đạo
+  // 🎨 Màu cố định, tái sử dụng, không re-alloc mỗi vòng
   const colors = [
-    "#ffa900", // vàng
-    "#262a53", // xanh than
-    "#cccccc", // xám
-    "#e17055", // cam
+    "#ffa900",
+    "#262a53",
+    "#cccccc",
+    "#e17055",
     "#74b9ff",
     "#a29bfe",
     "#55efc4",
     "#fab1a0",
     "#fdcb6e",
   ];
+  const colorCount = colors.length;
 
-  // 🚀 Render từng tag phụ
-  for (let i = 0; i < list.length; i++) {
-    const [tag, count] = list[i];
-    const color = colors[i % colors.length];
-
-    const html = `
-        <p class="freq_tag_item" style="--tag-color:${color}">
-          <span class="tag_dot" style="background:${color}"></span>
+  // 🚀 Dựng HTML một lần → tránh append từng dòng gây reflow
+  const html = list
+    .map(
+      ([tag, count], i) => `
+        <p class="freq_tag_item" style="--tag-color:${colors[i % colorCount]}">
+          <span class="tag_dot" style="background:${
+            colors[i % colorCount]
+          }"></span>
           <span class="tag_name">${tag}</span>
           <span class="tag_count">${count}</span>
-        </p>
-      `;
-    wrap.insertAdjacentHTML("beforeend", html);
-  }
+        </p>`
+    )
+    .join("");
+
+  // ✅ Cập nhật DOM 1 lần duy nhất
+  wrap.insertAdjacentHTML("beforeend", html);
 }
 
 function renderDegreeChart(grouped) {
   const ctx = document.getElementById("degreeChart");
   const top_edu = document.getElementById("top_edu");
-  if (!ctx) return;
+  if (!ctx || !Array.isArray(grouped)) return;
 
-  // 🧮 Gom dữ liệu theo nhóm trình độ
+  // 🧩 Regex pre-compile — giảm CPU
+  const regex = {
+    duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
+    caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
+    thpt: /\bthpt\b|trung[\s_]*học[\s_]*phổ[\s_]*thông/i,
+    sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
+    cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
+  };
+
   const degreeCounts = {
     "Cử nhân": 0,
     "Cao đẳng": 0,
@@ -2056,112 +2348,125 @@ function renderDegreeChart(grouped) {
     Khác: 0,
   };
 
-  grouped.forEach((lead) => {
-    const desc = (lead.Description || "").toLowerCase().trim();
+  // 🔹 Chia batch để render mượt UI (chỉ cần khi grouped lớn)
+  let i = 0;
+  const chunk = 500; // quét 500 lead/lần cho nhanh mà vẫn mượt
 
-    if (/(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/.test(desc)) {
-      degreeCounts["Dưới cao đẳng"]++;
-    } else if (/(cao[\s_]*đẳng|cao[\s_]*dang)/.test(desc)) {
-      degreeCounts["Cao đẳng"]++;
-    } else if (/\bthpt\b|trung[\s_]*học[\s_]*phổ[\s_]*thông/.test(desc)) {
-      degreeCounts["THPT"]++;
-    } else if (/(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/.test(desc)) {
-      degreeCounts["Sinh viên"]++;
-    } else if (/(cử[\s_]*nhân|cu[\s_]*nhan)/.test(desc)) {
-      degreeCounts["Cử nhân"]++;
-    } else if (desc !== "") {
-      degreeCounts["Khác"]++;
+  function processChunk(deadline) {
+    while (i < grouped.length && deadline.timeRemaining() > 4) {
+      const desc = (grouped[i].Description || "").toLowerCase();
+      if (regex.duoiCD.test(desc)) degreeCounts["Dưới cao đẳng"]++;
+      else if (regex.caoDang.test(desc)) degreeCounts["Cao đẳng"]++;
+      else if (regex.thpt.test(desc)) degreeCounts["THPT"]++;
+      else if (regex.sinhVien.test(desc)) degreeCounts["Sinh viên"]++;
+      else if (regex.cuNhan.test(desc)) degreeCounts["Cử nhân"]++;
+      else if (desc.trim() !== "") degreeCounts["Khác"]++;
+      i++;
     }
-  });
 
-  // 🏷️ Label + Value
-  const labels = Object.keys(degreeCounts);
-  const values = Object.values(degreeCounts);
-
-  // 🎨 Tô màu: cột cao nhất vàng, còn lại xám
-  const maxValue = Math.max(...values);
-  const barColors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
-
-  // 🔹 Gán trình độ cao nhất vào top_edu
-  if (top_edu && values.length) {
-    const maxIndex = values.indexOf(maxValue);
-    top_edu.innerText = labels[maxIndex] || "";
+    if (i < grouped.length) {
+      requestIdleCallback(processChunk);
+    } else {
+      updateChart();
+    }
   }
 
-  // 🔄 Nếu chart đã tồn tại → cập nhật
-  if (window.degreeChartInstance) {
-    const chart = window.degreeChartInstance;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = barColors;
-    chart.data.datasets[0].borderColor = barColors;
-    chart.update("active");
-    return;
+  // ⚙️ Cập nhật chart khi xử lý xong
+  function updateChart() {
+    const labels = Object.keys(degreeCounts);
+    const values = Object.values(degreeCounts);
+    const maxValue = Math.max(...values);
+    const barColors = values.map((v) =>
+      v === maxValue ? "#ffa900" : "#d9d9d9"
+    );
+
+    // Gán top
+    if (top_edu && maxValue > 0) {
+      const maxIndex = values.indexOf(maxValue);
+      top_edu.textContent = labels[maxIndex] || "";
+    }
+
+    // 🔄 Nếu chart tồn tại, update nhẹ
+    if (window.degreeChartInstance) {
+      const chart = window.degreeChartInstance;
+      // ⚡ Chỉ update nếu khác data
+      if (
+        JSON.stringify(chart.data.datasets[0].data) !== JSON.stringify(values)
+      ) {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = values;
+        chart.data.datasets[0].backgroundColor = barColors;
+        chart.data.datasets[0].borderColor = barColors;
+        chart.update();
+      }
+      return;
+    }
+
+    // 🚀 Chart mới
+    window.degreeChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Số lượng học viên theo trình độ học vấn",
+            data: values,
+            backgroundColor: barColors,
+            borderColor: barColors,
+            borderWidth: 1,
+            borderRadius: 6,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 400, // nhanh hơn 2 lần
+          easing: "easeOutCubic",
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.parsed.y.toLocaleString()} học viên`,
+            },
+          },
+          datalabels: {
+            anchor: "end",
+            align: "end",
+            font: { weight: "bold", size: 12 },
+            formatter: (v) => (v > 0 ? v : ""),
+          },
+        },
+        scales: {
+          x: {
+            grid: {
+              color: "rgba(0,0,0,0.05)",
+              drawTicks: false,
+              drawBorder: false,
+            },
+            ticks: { font: { size: 12 }, color: "#555" },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              font: { size: 11 },
+              color: "#666",
+              stepSize: Math.ceil(maxValue / 4) || 1,
+              callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
+            },
+            afterDataLimits: (scale) => (scale.max *= 1.1),
+            grid: { color: "rgba(0,0,0,0.05)" },
+          },
+        },
+      },
+      plugins: [ChartDataLabels],
+    });
   }
 
-  // 🚀 Tạo chart mới
-  window.degreeChartInstance = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Số lượng học viên theo trình độ học vấn",
-          data: values,
-          backgroundColor: barColors,
-          borderColor: barColors,
-          borderWidth: 1,
-          borderRadius: 6,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: {
-        duration: 900,
-        easing: "easeOutQuart",
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} học viên`,
-          },
-        },
-        datalabels: {
-          anchor: "end",
-          align: "end",
-          font: { weight: "bold", size: 12 },
-          formatter: (v) => (v > 0 ? v : ""),
-          animation: { duration: 500, easing: "easeOutBack" },
-        },
-      },
-      scales: {
-        x: {
-          grid: {
-            display: true,
-            color: "rgba(0,0,0,0.05)",
-            drawTicks: false,
-            drawBorder: false,
-          },
-          ticks: { font: { size: 12 }, color: "#555" },
-        },
-        y: {
-          beginAtZero: true,
-          ticks: {
-            font: { size: 11 },
-            color: "#666",
-            stepSize: Math.ceil(Math.max(...values) / 4) || 1,
-            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
-          },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
-          grid: { color: "rgba(0,0,0,0.05)" },
-        },
-      },
-    },
-    plugins: [ChartDataLabels],
-  });
+  // 🏁 Bắt đầu xử lý
+  requestIdleCallback(processChunk);
 }
 
 function renderProgramChart(grouped) {
@@ -2169,50 +2474,56 @@ function renderProgramChart(grouped) {
   const top_program = document.getElementById("top_program");
   if (!ctx) return;
 
-  const freq = grouped.tagFrequency;
+  // ✅ Dùng biến cục bộ, tránh đọc DOM nhiều lần
+  const freq = grouped.tagFrequency || {};
 
-  const programs = {
-    "MSc AI UMEF": freq["Msc_AI UMEF"] || 0,
-    "MBA UMEF": freq["MBA UMEF"] || 0,
-    "EMBA UMEF": freq["EMBA UMEF"] || 0,
-    BBA: freq["BBA"] || 0,
-    DBA: freq["DBA"] || 0,
-  };
+  // ✅ Gom dữ liệu chương trình
+  const programs = [
+    ["MSc AI UMEF", freq["Msc_AI UMEF"] || 0],
+    ["MBA UMEF", freq["MBA UMEF"] || 0],
+    ["EMBA UMEF", freq["EMBA UMEF"] || 0],
+    ["BBA", freq["BBA"] || 0],
+    ["DBA", freq["DBA"] || 0],
+  ].filter(([_, v]) => v > 0);
 
-  // 🧹 Lọc bỏ những chương trình = 0
-  const filtered = Object.entries(programs).filter(([_, v]) => v > 0);
-  const labels = filtered.map(([k]) => k);
-  const values = filtered.map(([_, v]) => v);
-
-  // 🎨 Cột cao nhất màu vàng, còn lại xám
-  const maxValue = Math.max(...values);
-  const colors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
-
-  // 🔹 Gán chương trình có nhiều leads nhất vào top_program
-  if (top_program && values.length) {
-    const maxIndex = values.indexOf(maxValue);
-    top_program.innerText = labels[maxIndex] || "";
-  }
-
-  // 🔄 Nếu chart đã tồn tại → update
-  if (window.programChartInstance) {
-    const chart = window.programChartInstance;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = colors;
-    chart.data.datasets[0].borderColor = colors;
-    chart.update("active");
+  if (!programs.length) {
+    if (top_program) top_program.textContent = "-";
+    if (window.programChartInstance) {
+      window.programChartInstance.destroy();
+      window.programChartInstance = null;
+    }
     return;
   }
 
-  // 🚀 Tạo chart mới
-  window.programChartInstance = new Chart(ctx, {
+  // ✅ Chuẩn bị labels & values
+  const labels = programs.map(([k]) => k);
+  const values = programs.map(([_, v]) => v);
+  const maxValue = Math.max(...values);
+  const colors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
+
+  // ✅ Cập nhật top label
+  if (top_program) top_program.textContent = labels[values.indexOf(maxValue)];
+
+  // ⚡ Nếu đã có chart → update cực nhanh, không re-render
+  const existing = window.programChartInstance;
+  if (existing) {
+    const ds = existing.data.datasets[0];
+    existing.data.labels = labels;
+    ds.data = values;
+    ds.backgroundColor = colors;
+    ds.borderColor = colors;
+    existing.options.animation.duration = 300; // nhanh hơn
+    existing.update("none"); // không animation nặng
+    return;
+  }
+
+  // 🚀 Tạo chart mới (chỉ chạy 1 lần)
+  const chart = new Chart(ctx, {
     type: "bar",
     data: {
       labels,
       datasets: [
         {
-          label: "Leads theo chương trình học",
           data: values,
           backgroundColor: colors,
           borderColor: colors,
@@ -2224,10 +2535,12 @@ function renderProgramChart(grouped) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 800, easing: "easeOutQuart" },
+      animation: false, // tắt hoàn toàn animation khi render lần đầu
       plugins: {
         legend: { display: false },
         tooltip: {
+          intersect: false,
+          animation: false,
           callbacks: {
             label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
           },
@@ -2235,31 +2548,32 @@ function renderProgramChart(grouped) {
         datalabels: {
           anchor: "end",
           align: "end",
-          font: { weight: "bold", size: 12 },
           color: "#333",
+          font: { weight: "bold", size: 12 },
           formatter: (v) => (v > 0 ? v : ""),
         },
       },
       scales: {
         x: {
-          grid: { display: true, color: "rgba(0, 0, 0, 0.05)" },
-          ticks: { font: { size: 12 }, color: "#555" },
+          grid: { display: false },
+          ticks: { color: "#555", font: { size: 12 } },
         },
         y: {
           beginAtZero: true,
           ticks: {
-            font: { size: 11 },
             color: "#666",
-            stepSize: Math.ceil(Math.max(...values) / 4) || 1,
+            font: { size: 11 },
+            stepSize: Math.ceil(maxValue / 4) || 1,
             callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
           },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
-          grid: { color: "rgba(0, 0, 0, 0.05)" },
+          grid: { color: "rgba(0,0,0,0.05)" },
         },
       },
     },
     plugins: [ChartDataLabels],
   });
+
+  window.programChartInstance = chart;
 }
 
 function renderLeadQualityMeter(grouped) {
@@ -2317,45 +2631,58 @@ function renderLeadQualityMeter(grouped) {
 function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
   currentTagFilter = tagFilter;
   const ctx = document.getElementById("leadTrendChart");
-  console.log(grouped, currentTagFilter);
-
   if (!ctx) return;
 
-  const dates = Object.keys(grouped.byDate).sort();
+  const byDate = grouped.byDate;
+  const dates = Object.keys(byDate).sort((a, b) => new Date(a) - new Date(b));
+  if (!dates.length) return;
 
-  const totalCounts = [];
-  const tagCounts = [];
-
-  for (const date of dates) {
-    const stat = grouped.byDate[date];
-    totalCounts.push(stat.total || 0);
-    tagCounts.push(stat[tagFilter] || 0);
+  // ✅ Chuẩn bị data cực nhanh (vòng for native)
+  const totalCounts = new Array(dates.length);
+  const tagCounts = new Array(dates.length);
+  for (let i = 0; i < dates.length; i++) {
+    const stat = byDate[dates[i]];
+    totalCounts[i] = stat.total || 0;
+    tagCounts[i] = stat[tagFilter] || 0;
   }
 
+  // ✅ Gradient cache (tạo 1 lần duy nhất)
+  let gradientTotal = window._gradTotal,
+    gradientTag = window._gradTag;
   const ctx2d = ctx.getContext("2d");
-  const gradientTotal = ctx2d.createLinearGradient(0, 0, 0, 400);
-  gradientTotal.addColorStop(0, "rgba(255, 171, 0, 0.8)");
-  gradientTotal.addColorStop(1, "rgba(255, 171, 0, 0.1)");
+  if (!gradientTotal || !gradientTag) {
+    gradientTotal = ctx2d.createLinearGradient(0, 0, 0, 400);
+    gradientTotal.addColorStop(0, "rgba(255, 171, 0, 0.8)");
+    gradientTotal.addColorStop(1, "rgba(255, 171, 0, 0.1)");
+    gradientTag = ctx2d.createLinearGradient(0, 0, 0, 400);
+    gradientTag.addColorStop(0, "rgba(38,42,83, 0.8)");
+    gradientTag.addColorStop(1, "rgba(38,42,83, 0.1)");
+    window._gradTotal = gradientTotal;
+    window._gradTag = gradientTag;
+  }
 
-  const gradientTag = ctx2d.createLinearGradient(0, 0, 0, 400);
-  gradientTag.addColorStop(0, "rgba(38,42,83, 0.8)");
-  gradientTag.addColorStop(1, "rgba(38,42,83, 0.1)");
+  // 🧮 Update lead counter + tag chart (không block UI)
+  requestIdleCallback(() => {
+    updateLeadCounters(grouped, currentTagFilter);
+    renderLeadTagChart(grouped);
+  });
 
-  updateLeadCounters(grouped, currentTagFilter);
-  renderLeadTagChart(grouped);
-
-  // Nếu chart đã tồn tại → update
-  if (window.leadChartInstance) {
-    const chart = window.leadChartInstance;
+  // 🔄 Nếu chart đã có → update data cực nhanh
+  const chart = window.leadChartInstance;
+  if (chart) {
     chart.data.labels = dates;
-    chart.data.datasets[0].data = totalCounts;
-    chart.data.datasets[1].data = tagCounts;
-    chart.data.datasets[1].label = `${tagFilter} Leads`;
-    chart.update("active"); // 🌀 mượt mà
+    const [total, tag] = chart.data.datasets;
+    total.data = totalCounts;
+    tag.data = tagCounts;
+    tag.label = `${tagFilter} Leads`;
+
+    // 🧠 update nhẹ, bỏ animation cũ
+    chart.options.animation.duration = 400;
+    chart.update("active");
     return;
   }
 
-  // Nếu chưa có chart → khởi tạo mới
+  // 🚀 Tạo chart mới – config tối giản, full hiệu năng
   window.leadChartInstance = new Chart(ctx, {
     type: "line",
     data: {
@@ -2365,51 +2692,58 @@ function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
           label: "Total Leads",
           data: totalCounts,
           backgroundColor: gradientTotal,
-          borderColor: "rgba(255, 171, 0, 1)",
+          borderColor: "#ffab00",
           fill: true,
-          tension: 0.1,
-          pointRadius: 3,
-          pointHoverRadius: 6,
+          tension: 0,
+          pointRadius: 0,
+          borderWidth: 2,
         },
         {
           label: `${tagFilter} Leads`,
           data: tagCounts,
           backgroundColor: gradientTag,
-
-          borderColor: "rgba(38,42,83, 1)",
+          borderColor: "#262a53",
           fill: true,
-          tension: 0.1,
-          pointRadius: 3,
-          pointHoverRadius: 6,
+          tension: 0,
+          pointRadius: 0,
+          borderWidth: 2,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: {
-        duration: 900,
-        easing: "easeOutQuart",
-      },
+      animation: { duration: 600, easing: "easeOutQuart" },
+      elements: { line: { borderJoinStyle: "round" } },
       plugins: {
         legend: false,
         tooltip: {
+          mode: "index",
+          intersect: false,
           callbacks: {
             label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
           },
         },
       },
       scales: {
-        x: { ticks: { color: "#555" }, grid: { color: "rgba(0,0,0,0.05)" } },
+        x: {
+          ticks: { color: "#555", maxTicksLimit: 10 },
+          grid: { color: "rgba(0,0,0,0.05)" },
+        },
         y: {
           beginAtZero: true,
+          ticks: {
+            color: "#666",
+            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k" : v),
+          },
           grid: { color: "rgba(0,0,0,0.05)" },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
+          afterDataLimits: (scale) => (scale.max *= 1.05),
         },
       },
     },
   });
 }
+
 function getColorFromName(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++)
@@ -2444,8 +2778,13 @@ function initSaleDetailClose() {
   const closeBtn = saleDetailUI.querySelector(".sale_report_close");
   if (!closeBtn) return;
 
+  // 🧠 Nếu đã gắn event rồi thì thôi
+  if (closeBtn.dataset.bound === "1") return;
+  closeBtn.dataset.bound = "1";
+
   closeBtn.addEventListener("click", () => {
     dashboard.classList.remove("sale_detail");
+
     const currentAccount =
       localStorage.getItem("selectedAccount") || "Total Data";
 
@@ -2471,6 +2810,9 @@ function initSaleDetailClose() {
 initSaleDetailClose();
 
 // ==================== renderToplistBySale ====================
+// Giữ dữ liệu gốc tạm thời (để restore)
+let ORIGINAL_DATA = null;
+
 function renderToplistBySale(grouped) {
   renderSaleDropdown();
 
@@ -2481,6 +2823,9 @@ function renderToplistBySale(grouped) {
 
   if (!wrap || !grouped?.byOwner || !dashboard || !saleDetailUI || !dateUI)
     return;
+
+  // ✅ Nếu chưa có bản gốc → lưu lại
+  if (!ORIGINAL_DATA) ORIGINAL_DATA = RAW_DATA;
 
   const list = Object.entries(grouped.byOwner)
     .map(([owner, data]) => {
@@ -2523,7 +2868,7 @@ function renderToplistBySale(grouped) {
     wrap.insertAdjacentHTML("beforeend", html);
   });
 
-  // 🔹 Click nút ba chấm → filter và show sale_detail
+  // 🔹 Click lọc theo sale
   wrap.querySelectorAll(".toplist_more").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const li = e.currentTarget.closest("li");
@@ -2532,7 +2877,6 @@ function renderToplistBySale(grouped) {
 
       const leads = filterBySaleExact(saleName);
       processAndRenderAll(leads);
-
       dashboard.classList.add("sale_detail");
 
       const img = saleDetailUI.querySelector("img");
@@ -2552,6 +2896,16 @@ function renderToplistBySale(grouped) {
       li.classList.add("active");
     });
   });
+
+  // 🔹 Khi bấm nút “tắt filter” (ở phần sale_detail)
+  const backBtn = saleDetailUI.querySelector(".back_to_all");
+  if (backBtn && !backBtn.dataset.bound) {
+    backBtn.dataset.bound = "1";
+    backBtn.addEventListener("click", () => {
+      dashboard.classList.remove("sale_detail");
+      if (ORIGINAL_DATA) processAndRenderAll(ORIGINAL_DATA);
+    });
+  }
 }
 
 // 🔹 Filter sale chính xác tên clean
