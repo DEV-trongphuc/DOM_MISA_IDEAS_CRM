@@ -147,8 +147,8 @@ async function fetchLeads(from, to) {
   // Lấy token 1 lần
   let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
 
-  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
+  // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+  const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
   const res = await fetch(url);
   const data = await res.json();
 
@@ -1530,6 +1530,21 @@ function renderLeadTagChart(grouped) {
 // 🧩 Render Toplist
 // ======================
 let ORIGINAL_DATA = null;
+function mergeAllArrays(obj) {
+  const result = [];
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (value && typeof value === "object") {
+      for (const arr of Object.values(value)) {
+        if (Array.isArray(arr)) {
+          result.push(...arr);
+        }
+      }
+    }
+  }
+
+  return result;
+}
 function renderToplist(grouped, mode = "default") {
   const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist");
   const dashboard = document.querySelector(".dom_dashboard");
@@ -1669,8 +1684,15 @@ function renderToplist(grouped, mode = "default") {
       const campaign = li.dataset.campaign;
       const source = li.dataset.source;
       const medium = li.dataset.medium;
-      const leads = GROUPED.byCampaign[campaign][source][medium];
-      processAndRenderAll(leads);
+      if (campaign && source && medium) {
+        const leads = GROUPED.byCampaign[campaign][source][medium];
+        processAndRenderAll(leads);
+      } else if (campaign) {
+        const leads = GROUPED.byCampaign[campaign];
+        const dataMerged = mergeAllArrays(leads);
+        processAndRenderAll(dataMerged);
+      }
+
       // const leads = GROUPED[][][]
       // .filter((l) => {
       //   const lCampaign = l.CustomField13Text || "Campaign";
@@ -1683,7 +1705,6 @@ function renderToplist(grouped, mode = "default") {
       //   );
       // });
 
-      processAndRenderAll(leads);
       dashboard.classList.add("sale_detail_ads");
 
       const img = saleDetailUI.querySelector("img");
