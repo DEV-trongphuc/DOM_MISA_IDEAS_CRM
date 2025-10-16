@@ -154,41 +154,29 @@ async function fetchLeads(
   from,
   to,
   username = "numt@ideas.edu.vn",
-  password = "Hieunu11089091",
-  retries = 3
+  password = "Hieunu11089091"
 ) {
   document.querySelector(".loading").classList.add("active");
 
-  try {
-    let token = await getToken(username, password);
+  // Lấy token 1 lần
+  let token = await getToken(username, password);
 
-    for (let i = 0; i < retries; i++) {
-      const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-      const res = await fetch(url);
-      const data = await res.json();
+  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+  const res = await fetch(url);
+  const data = await res.json();
 
-      if (!data.error && data.data?.length) {
-        CRM_DATA = data.data;
-        document.querySelector(".loading").classList.remove("active");
-        return CRM_DATA;
-      }
-
-      console.warn(
-        "Token lỗi hoặc không có dữ liệu, xóa token và thử lại:",
-        data.error
-      );
-      localStorage.removeItem("misa_token");
-      token = await getToken(username, password); // Lấy token mới
-    }
-
-    throw new Error("Không lấy được dữ liệu sau 3 lần thử");
-  } catch (err) {
-    console.error(err);
-    alert("Không lấy được dữ liệu, thử token khác");
+  // Nếu có dữ liệu thì gán vào CRM_DATA
+  if (data.data?.length) {
+    CRM_DATA = data.data;
+  } else {
+    console.warn("Không có dữ liệu hoặc token lỗi:", data.error);
     localStorage.removeItem("misa_token");
-    document.querySelector(".loading").classList.remove("active");
   }
+
+  document.querySelector(".loading").classList.remove("active");
+  return CRM_DATA;
 }
+
 // const initRange = getDateRange("this_month");
 
 // fetchLeads(initRange.from, initRange.to, "numt@ideas.edu.vn", "Hieunu11089091");
@@ -226,7 +214,9 @@ const tagPriority = [
   "Untag",
 ];
 function processCRMData(data) {
-  const result = {
+  document.querySelector(".loading").classList.add("active");
+
+  const r = {
     byDate: {},
     byCampaign: {},
     byOwner: {},
@@ -236,122 +226,83 @@ function processCRMData(data) {
     tagFrequency: {},
   };
 
-  for (let i = 0; i < data.length; i++) {
-    const lead = data[i];
-
-    // 🗓️ Ngày tạo
-    const dateKey = lead.CreatedDate?.slice(0, 10) || "Unknown Date";
-
-    // 🏷️ Tag
+  for (const lead of data) {
+    const date = lead.CreatedDate?.slice(0, 10) || "Unknown Date";
     const tags = getTagsArray(lead.TagIDText);
-    let mainTag = getPrimaryTag(tags, tagPriority);
-
-    // ⚙️ Nếu có tag "Qualified" thì coi như "Needed"
+    let mainTag = getPrimaryTag(tags, tagPriority) || "Untag";
     if (mainTag === "Qualified") mainTag = "Needed";
-
-    // 🆕 Nếu không có tag nào hết
-    if (tags.length === 0) {
-      tags.push("Untag");
-      mainTag = "Untag";
-    }
-
+    if (!tags.length) tags.push("Untag");
     lead.TagMain = mainTag;
 
-    // 🏢 Đơn vị (IDEAS / VTCI)
     const org = lead.CustomField16Text || "Unknown Org";
-
-    // 🔢 Đếm tần suất tất cả tag (phụ)
-    for (const tag of tags) {
-      result.tagFrequency[tag] = (result.tagFrequency[tag] || 0) + 1;
-    }
-
-    // ================================
-    // 📅 1️⃣ Nhóm theo ngày + thống kê tag
-    // ================================
-    if (!result.byDate[dateKey]) result.byDate[dateKey] = { total: 0 };
-    result.byDate[dateKey].total++;
-    result.byDate[dateKey][mainTag] =
-      (result.byDate[dateKey][mainTag] || 0) + 1;
-
-    // ================================
-    // 🏷️ 2️⃣ Nhóm theo tag chính
-    // ================================
-    if (!result.byTag[mainTag]) result.byTag[mainTag] = [];
-    result.byTag[mainTag].push(lead);
-
-    // ================================
-    // 🏷️ + 📅 3️⃣ Nhóm theo tag + ngày
-    // ================================
-    if (!result.byTagAndDate[mainTag]) result.byTagAndDate[mainTag] = {};
-    if (!result.byTagAndDate[mainTag][dateKey])
-      result.byTagAndDate[mainTag][dateKey] = [];
-    result.byTagAndDate[mainTag][dateKey].push(lead);
-
-    // ================================
-    // 📢 4️⃣ Nhóm theo Campaign / Source / Medium
-    // ================================
     const campaign = lead.CustomField13Text || "Unknown Campaign";
     const source = lead.CustomField14Text || "Unknown Source";
     const medium = lead.CustomField15Text || "Unknown Medium";
-
-    if (!result.byCampaign[campaign]) result.byCampaign[campaign] = {};
-    if (!result.byCampaign[campaign][source])
-      result.byCampaign[campaign][source] = {};
-    if (!result.byCampaign[campaign][source][medium])
-      result.byCampaign[campaign][source][medium] = [];
-
-    result.byCampaign[campaign][source][medium].push(lead);
-
-    // ================================
-    // 👤 5️⃣ Nhóm theo Owner
-    // ================================
     const owner = lead.OwnerIDText || "No Owner";
-    if (!result.byOwner[owner])
-      result.byOwner[owner] = { total: 0, tags: {}, leads: [] };
 
-    result.byOwner[owner].total++;
-    result.byOwner[owner].leads.push(lead);
+    // 1️⃣ tag frequency
+    for (const tag of tags)
+      r.tagFrequency[tag] = (r.tagFrequency[tag] || 0) + 1;
 
-    if (!result.byOwner[owner].tags[mainTag])
-      result.byOwner[owner].tags[mainTag] = { count: 0, leads: [] };
+    // 2️⃣ byDate
+    let dateObj = r.byDate[date];
+    if (!dateObj) r.byDate[date] = dateObj = { total: 0 };
+    dateObj.total++;
+    dateObj[mainTag] = (dateObj[mainTag] || 0) + 1;
 
-    result.byOwner[owner].tags[mainTag].count++;
-    result.byOwner[owner].tags[mainTag].leads.push(lead);
+    // 3️⃣ byTag
+    let tagArr = r.byTag[mainTag];
+    if (!tagArr) r.byTag[mainTag] = tagArr = [];
+    tagArr.push(lead);
 
-    // ================================
-    // 🏢 6️⃣ Nhóm theo tổ chức (IDEAS / VTCI)
-    // ================================
-    if (!result.byOrg[org]) {
-      result.byOrg[org] = {
-        total: 0,
-        tags: {},
-        owners: {},
-        byDate: {},
-      };
-    }
+    // 4️⃣ byTagAndDate
+    let tagDateObj = r.byTagAndDate[mainTag];
+    if (!tagDateObj) r.byTagAndDate[mainTag] = tagDateObj = {};
+    let dateArr = tagDateObj[date];
+    if (!dateArr) tagDateObj[date] = dateArr = [];
+    dateArr.push(lead);
 
-    result.byOrg[org].total++;
+    // 5️⃣ byCampaign
+    let campObj = r.byCampaign[campaign];
+    if (!campObj) r.byCampaign[campaign] = campObj = {};
+    let sourceObj = campObj[source];
+    if (!sourceObj) campObj[source] = sourceObj = {};
+    let mediumArr = sourceObj[medium];
+    if (!mediumArr) sourceObj[medium] = mediumArr = [];
+    mediumArr.push(lead);
 
-    // Nhóm theo tag trong từng org
-    if (!result.byOrg[org].tags[mainTag]) result.byOrg[org].tags[mainTag] = [];
-    result.byOrg[org].tags[mainTag].push(lead);
+    // 6️⃣ byOwner
+    let ownerObj = r.byOwner[owner];
+    if (!ownerObj)
+      r.byOwner[owner] = ownerObj = { total: 0, tags: {}, leads: [] };
+    ownerObj.total++;
+    ownerObj.leads.push(lead);
+    let ownerTagObj = ownerObj.tags[mainTag];
+    if (!ownerTagObj)
+      ownerObj.tags[mainTag] = ownerTagObj = { count: 0, leads: [] };
+    ownerTagObj.count++;
+    ownerTagObj.leads.push(lead);
 
-    // Nhóm theo owner trong từng org
-    if (!result.byOrg[org].owners[owner]) result.byOrg[org].owners[owner] = [];
-    result.byOrg[org].owners[owner].push(lead);
+    // 7️⃣ byOrg
+    let orgObj = r.byOrg[org];
+    if (!orgObj)
+      r.byOrg[org] = orgObj = { total: 0, tags: {}, owners: {}, byDate: {} };
+    orgObj.total++;
+    let orgTagArr = orgObj.tags[mainTag];
+    if (!orgTagArr) orgObj.tags[mainTag] = orgTagArr = [];
+    orgTagArr.push(lead);
 
-    // Nhóm theo ngày trong từng org
-    if (!result.byOrg[org].byDate[dateKey])
-      result.byOrg[org].byDate[dateKey] = [];
-    result.byOrg[org].byDate[dateKey].push(lead);
+    let orgOwnerArr = orgObj.owners[owner];
+    if (!orgOwnerArr) orgObj.owners[owner] = orgOwnerArr = [];
+    orgOwnerArr.push(lead);
+
+    let orgDateArr = orgObj.byDate[date];
+    if (!orgDateArr) orgObj.byDate[date] = orgDateArr = [];
+    orgDateArr.push(lead);
   }
 
-  // ✅ Sắp xếp byDate theo thời gian tăng dần
-  result.byDate = Object.fromEntries(
-    Object.entries(result.byDate).sort(([a], [b]) => a.localeCompare(b))
-  );
-
-  return result;
+  document.querySelector(".loading").classList.remove("active");
+  return r;
 }
 
 // ----------------------------------------
@@ -366,6 +317,7 @@ const currentFilter = { campaign: null, source: null, medium: null };
 // ----------------------------------------
 // 🚀 Main
 // ----------------------------------------
+
 async function main() {
   const initRange = getDateRange("this_month");
 
@@ -395,6 +347,7 @@ async function processAndRenderAll(data) {
   renderDegreeChart(data);
   renderProgramChart(GROUPED);
   renderLeadTagChart(GROUPED);
+  // renderSaleDropdown(GROUPED);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1368,11 +1321,18 @@ function setupDropdowns() {
 
 function renderLeadTagChart(grouped) {
   const ctx = document.getElementById("leadTagChart");
+  const top_tag = document.getElementById("top_tag");
   if (!ctx) return;
 
   const labels = Object.keys(grouped.byTag);
   const values = labels.map((tag) => grouped.byTag[tag].length);
   const barColors = labels.map(() => "rgba(255, 162, 0, 0.9)");
+
+  // 🔹 Gán label có giá trị lớn nhất vào top_tag
+  if (top_tag && values.length) {
+    const maxIndex = values.indexOf(Math.max(...values));
+    top_tag.innerText = labels[maxIndex] || "";
+  }
 
   // Nếu chart đã tồn tại → chỉ update data
   if (window.leadTagChartInstance) {
@@ -1612,97 +1572,6 @@ document.addEventListener("DOMContentLoaded", () => {
     renderToplist(GROUPED, "campaign");
   });
 });
-
-function renderToplistBySale(grouped) {
-  const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist.sale");
-  if (!wrap || !grouped?.byOwner) return;
-
-  const list = [];
-
-  // 🧮 Gom dữ liệu theo sale
-  for (const [owner, data] of Object.entries(grouped.byOwner)) {
-    const total = data.total || 0;
-    const needed = data.tags?.Needed?.count || 0;
-    const considering = data.tags?.Considering?.count || 0;
-    const quality = needed + considering;
-    const ratio = total > 0 ? ((quality / total) * 100).toFixed(1) : 0;
-
-    list.push({ key: owner, total, quality, ratio: +ratio });
-  }
-
-  // 🔽 Sắp xếp theo tổng lead
-  list.sort((a, b) => b.total - a.total);
-  wrap.innerHTML = "";
-
-  // 🎨 Hàm random màu nhưng ổn định (hash theo tên)
-  function getColorFromName(name) {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++)
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    const h = Math.abs(hash) % 360;
-    const s = 65 + (hash % 10); // saturation 65–75%
-    const l = 55 + (hash % 10); // lightness 55–65%
-    // convert hsl → hex (đơn giản)
-    const c = (1 - Math.abs((2 * l) / 100 - 1)) * (s / 100);
-    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-    const m = l / 100 - c / 2;
-    let [r, g, b] = [0, 0, 0];
-    if (h < 60) [r, g, b] = [c, x, 0];
-    else if (h < 120) [r, g, b] = [x, c, 0];
-    else if (h < 180) [r, g, b] = [0, c, x];
-    else if (h < 240) [r, g, b] = [0, x, c];
-    else if (h < 300) [r, g, b] = [x, 0, c];
-    else [r, g, b] = [c, 0, x];
-    const toHex = (v) =>
-      Math.round((v + m) * 255)
-        .toString(16)
-        .padStart(2, "0");
-    return `${toHex(r)}${toHex(g)}${toHex(b)}`;
-  }
-
-  // 🚀 Render
-  for (const item of list) {
-    // 💬 Làm gọn tên
-    const cleanName = item.key.replace(/\(NV.*?\)/gi, "").trim();
-
-    // 🎨 Màu % theo ratio
-    let barColor = "rgb(0, 177, 72)";
-    if (item.ratio < 20) barColor = "rgb(225, 112, 85)";
-    else if (item.ratio < 40) barColor = "rgb(255, 169, 0)";
-
-    // 🧑‍🎨 Avatar tạo theo tên
-    const bg = getColorFromName(cleanName);
-    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      cleanName
-    )}&background=${bg}&color=fff&bold=true`;
-
-    const html = `
-      <li>
-        <p>
-          <img src="${avatar}" class="avatar" />
-          <span>${cleanName}</span>
-        </p>
-        <p><i class="fa-solid fa-user"></i><span class="total_lead">${
-          item.total
-        }</span></p>
-        <p><i class="fa-solid fa-user-graduate"></i><span class="quality_lead">${
-          item.quality
-        }</span></p>
-        <p class="toplist_percent"
-           style="color:${barColor}; background:rgba(${barColor
-      .replace("rgb(", "")
-      .replace(")", "")},0.1)">
-           ${item.ratio}%
-        </p>
-        <p class="toplist_more">
-          <i class="fa-solid fa-ellipsis"></i>
-        </p>
-      </li>
-    `;
-
-    wrap.insertAdjacentHTML("beforeend", html);
-  }
-}
 
 function setupSaleQualityDropdown(grouped) {
   const select = document.querySelector(".dom_select.sale_quality");
@@ -1980,7 +1849,8 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
           grid: { color: "rgba(0,0,0,0.05)" },
           ticks: {
             color: "#666",
-            stepSize: step,
+            stepSize:
+              Math.ceil(Math.max(...totalCounts, ...tagCounts) / 4) || 1,
           },
           afterDataLimits: (scale) => {
             scale.max *= 1.1; // tăng 10%
@@ -1990,6 +1860,20 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
     },
     plugins: [ChartDataLabels],
   });
+}
+
+function maskEmail(email) {
+  if (!email) return "-";
+  const [user, domain] = email.split("@");
+  if (!domain) return email;
+  const visible = user.slice(0, 3);
+  return `${visible}...@${domain}`;
+}
+
+function maskMobile(mobile) {
+  if (!mobile) return "-";
+  const last4 = mobile.slice(-4);
+  return "*".repeat(Math.max(0, mobile.length - 4)) + last4;
 }
 
 function renderLeadTable(leads) {
@@ -2004,7 +1888,6 @@ function renderLeadTable(leads) {
     return;
   }
 
-  // ====== Cấu trúc cột ======
   const headers = [
     "Created Date",
     "Lead Name",
@@ -2019,7 +1902,6 @@ function renderLeadTable(leads) {
     "Description",
   ];
 
-  // ====== Render body ======
   const rowsHtml = leads
     .map((lead, i) => {
       const {
@@ -2040,16 +1922,14 @@ function renderLeadTable(leads) {
         ? new Date(CreatedDate).toLocaleDateString("vi-VN")
         : "-";
 
-      // 🏷️ Xử lý split tag
+      // 🏷️ Tags
       let tagHtml = "-";
       if (TagIDText && TagIDText.trim() !== "") {
         const tags = TagIDText.split(",")
           .map((t) => t.trim())
-          .filter((t) => t !== "");
-
+          .filter(Boolean);
         tagHtml = tags
           .map((tag) => {
-            // 🎨 Màu tag chính
             let tagClass = "";
             if (tag.includes("Needed")) tagClass = "tag_needed";
             else if (tag.includes("Considering")) tagClass = "tag_considering";
@@ -2057,7 +1937,6 @@ function renderLeadTable(leads) {
             else if (tag.includes("Unqualified")) tagClass = "tag_unqualified";
             else if (tag.includes("Junk")) tagClass = "tag_junk";
             else tagClass = "tag_other";
-
             return `<span class="tag_chip ${tagClass}">${tag}</span>`;
           })
           .join(" ");
@@ -2067,10 +1946,10 @@ function renderLeadTable(leads) {
           <tr data-id="${i}">
             <td>${date}</td>
             <td>${LeadName || "-"}</td>
-            <td>${Email || "-"}</td>
-            <td><i class="fa-solid fa-phone table_phone"></i> ${
-              Mobile || "-"
-            }</td>
+            <td>${maskEmail(Email)}</td>
+            <td><i class="fa-solid fa-phone table_phone"></i> ${maskMobile(
+              Mobile
+            )}</td>
             <td>${OwnerIDText.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
             <td>${tagHtml}</td>
             <td>${CustomField13Text || "-"}</td>
@@ -2083,7 +1962,6 @@ function renderLeadTable(leads) {
     })
     .join("");
 
-  // ====== Footer tổng ======
   const footer = `
       <tfoot>
         <tr>
@@ -2092,12 +1970,11 @@ function renderLeadTable(leads) {
     leads.length > 1 ? "s" : ""
   }</strong>
           </td>
-             <td colspan="${headers.length - 3}">   </td>
+          <td colspan="${headers.length - 3}"></td>
         </tr>
       </tfoot>
     `;
 
-  // ====== Render bảng ======
   container.innerHTML = `
       <div class="dom_table_container">
         <table id="main_table">
@@ -2110,6 +1987,8 @@ function renderLeadTable(leads) {
       </div>
     `;
 }
+
+// ======================  CHART ======================
 
 function renderTagFrequency(grouped) {
   const wrap = document.querySelector(".frequency_tag");
@@ -2174,10 +2053,10 @@ function renderTagFrequency(grouped) {
     wrap.insertAdjacentHTML("beforeend", html);
   }
 }
+
 function renderDegreeChart(grouped) {
   const ctx = document.getElementById("degreeChart");
-  console.log("grouped", grouped);
-
+  const top_edu = document.getElementById("top_edu");
   if (!ctx) return;
 
   // 🧮 Gom dữ liệu theo nhóm trình độ
@@ -2189,8 +2068,9 @@ function renderDegreeChart(grouped) {
     "Sinh viên": 0,
     Khác: 0,
   };
+
   grouped.forEach((lead) => {
-    let desc = (lead.Description || "").toLowerCase().trim();
+    const desc = (lead.Description || "").toLowerCase().trim();
 
     if (/(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/.test(desc)) {
       degreeCounts["Dưới cao đẳng"]++;
@@ -2215,7 +2095,13 @@ function renderDegreeChart(grouped) {
   const maxValue = Math.max(...values);
   const barColors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
 
-  // 🔄 Nếu chart đã có → cập nhật
+  // 🔹 Gán trình độ cao nhất vào top_edu
+  if (top_edu && values.length) {
+    const maxIndex = values.indexOf(maxValue);
+    top_edu.innerText = labels[maxIndex] || "";
+  }
+
+  // 🔄 Nếu chart đã tồn tại → cập nhật
   if (window.degreeChartInstance) {
     const chart = window.degreeChartInstance;
     chart.data.labels = labels;
@@ -2291,9 +2177,9 @@ function renderDegreeChart(grouped) {
   });
 }
 
-// ====================== PROGRAM CHART ======================
 function renderProgramChart(grouped) {
   const ctx = document.getElementById("programChart");
+  const top_program = document.getElementById("top_program");
   if (!ctx) return;
 
   const freq = grouped.tagFrequency;
@@ -2306,7 +2192,7 @@ function renderProgramChart(grouped) {
     DBA: freq["DBA"] || 0,
   };
 
-  // 🧹 Lọc bỏ những cái = 0
+  // 🧹 Lọc bỏ những chương trình = 0
   const filtered = Object.entries(programs).filter(([_, v]) => v > 0);
   const labels = filtered.map(([k]) => k);
   const values = filtered.map(([_, v]) => v);
@@ -2315,6 +2201,13 @@ function renderProgramChart(grouped) {
   const maxValue = Math.max(...values);
   const colors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
 
+  // 🔹 Gán chương trình có nhiều leads nhất vào top_program
+  if (top_program && values.length) {
+    const maxIndex = values.indexOf(maxValue);
+    top_program.innerText = labels[maxIndex] || "";
+  }
+
+  // 🔄 Nếu chart đã tồn tại → update
   if (window.programChartInstance) {
     const chart = window.programChartInstance;
     chart.data.labels = labels;
@@ -2325,6 +2218,7 @@ function renderProgramChart(grouped) {
     return;
   }
 
+  // 🚀 Tạo chart mới
   window.programChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
@@ -2381,7 +2275,6 @@ function renderProgramChart(grouped) {
   });
 }
 
-// ====================== DEGREE CHART ======================
 function renderLeadQualityMeter(grouped) {
   if (!grouped?.byTag) return;
 
@@ -2433,8 +2326,6 @@ function renderLeadQualityMeter(grouped) {
     donut.style.setProperty("--fill", fillColor);
   }
 }
-
-// CHART
 
 function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
   currentTagFilter = tagFilter;
@@ -2530,5 +2421,205 @@ function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
         },
       },
     },
+  });
+}
+function getColorFromName(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const h = Math.abs(hash) % 360;
+  const s = 65 + (hash % 10);
+  const l = 55 + (hash % 10);
+  const c = (1 - Math.abs((2 * l) / 100 - 1)) * (s / 100);
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l / 100 - c / 2;
+  let [r, g, b] = [0, 0, 0];
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const toHex = (v) =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// ==================== Khởi tạo nút Close chỉ 1 lần ====================
+function initSaleDetailClose() {
+  const dashboard = document.querySelector(".dom_dashboard");
+  const saleDetailUI = document.querySelector(".sale_report");
+  const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist.sale");
+  if (!dashboard || !saleDetailUI || !wrap) return;
+
+  const closeBtn = saleDetailUI.querySelector(".sale_report_close");
+  if (!closeBtn) return;
+
+  closeBtn.addEventListener("click", () => {
+    dashboard.classList.remove("sale_detail");
+    const currentAccount =
+      localStorage.getItem("selectedAccount") || "Total Data";
+
+    let filteredData = RAW_DATA;
+    if (currentAccount === "VTCI") {
+      filteredData = RAW_DATA.filter(
+        (l) => l.CustomField16Text?.trim().toUpperCase() === "VTCI"
+      );
+    } else if (currentAccount === "IDEAS") {
+      filteredData = RAW_DATA.filter(
+        (l) => l.CustomField16Text?.trim().toUpperCase() === "IDEAS"
+      );
+    }
+
+    processAndRenderAll(filteredData);
+
+    wrap.querySelectorAll("li").forEach((l) => l.classList.remove("active"));
+    console.log("🔄 Dashboard reset về trạng thái gốc");
+  });
+}
+
+// gọi 1 lần khi load dashboard
+initSaleDetailClose();
+
+// ==================== renderToplistBySale ====================
+function renderToplistBySale(grouped) {
+  renderSaleDropdown();
+
+  const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist.sale");
+  const dashboard = document.querySelector(".dom_dashboard");
+  const saleDetailUI = document.querySelector(".sale_report");
+  const dateUI = document.querySelector(".dom_date");
+
+  if (!wrap || !grouped?.byOwner || !dashboard || !saleDetailUI || !dateUI)
+    return;
+
+  const list = Object.entries(grouped.byOwner)
+    .map(([owner, data]) => {
+      const total = data.total || 0;
+      const needed = data.tags?.Needed?.count || 0;
+      const considering = data.tags?.Considering?.count || 0;
+      const quality = needed + considering;
+      const ratio = total > 0 ? ((quality / total) * 100).toFixed(1) : 0;
+      return { key: owner, total, quality, ratio: +ratio };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  wrap.innerHTML = "";
+
+  list.forEach((item) => {
+    const cleanName = item.key.replace(/\(NV.*?\)/gi, "").trim();
+    let barColor = "rgb(0, 177, 72)";
+    if (item.ratio < 20) barColor = "rgb(225, 112, 85)";
+    else if (item.ratio < 40) barColor = "rgb(255, 169, 0)";
+
+    const bg = getColorFromName(cleanName);
+    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      cleanName
+    )}&background=${bg}&color=fff&bold=true`;
+
+    const html = `
+      <li data-owner="${cleanName}">
+        <p><img src="${avatar}" class="avatar"/><span>${cleanName}</span></p>
+        <p><i class="fa-solid fa-user"></i><span class="total_lead">${
+          item.total
+        }</span></p>
+        <p><i class="fa-solid fa-user-graduate"></i><span class="quality_lead">${
+          item.quality
+        }</span></p>
+        <p class="toplist_percent" style="color:${barColor}; background:rgba(${barColor
+      .replace("rgb(", "")
+      .replace(")", "")},0.1)">${item.ratio}%</p>
+        <p class="toplist_more" title="Lọc theo ${cleanName}"><i class="fa-solid fa-magnifying-glass-chart main_clr"></i></p>
+      </li>`;
+    wrap.insertAdjacentHTML("beforeend", html);
+  });
+
+  // 🔹 Click nút ba chấm → filter và show sale_detail
+  wrap.querySelectorAll(".toplist_more").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const li = e.currentTarget.closest("li");
+      const saleName = li.dataset.owner;
+      if (!saleName) return;
+
+      const leads = filterBySaleExact(saleName);
+      processAndRenderAll(leads);
+
+      dashboard.classList.add("sale_detail");
+
+      const img = saleDetailUI.querySelector("img");
+      const pName = saleDetailUI.querySelector(".dom_selected");
+      const calender = saleDetailUI.querySelector(".sale_report_calender");
+      if (img)
+        img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          saleName
+        )}&background=3381c1&color=fff&bold=true`;
+      if (pName) pName.innerText = saleName;
+      if (calender) calender.innerText = dateUI.innerText;
+
+      const dropdown = saleDetailUI.querySelector(".dom_select_show");
+      renderSaleDropdown(dropdown);
+
+      wrap.querySelectorAll("li").forEach((l) => l.classList.remove("active"));
+      li.classList.add("active");
+    });
+  });
+}
+
+// 🔹 Filter sale chính xác tên clean
+function filterBySaleExact(saleName) {
+  const group = processCRMData(RAW_DATA);
+  if (!group?.byOwner) return [];
+  const matchedSales = Object.keys(group.byOwner).filter(
+    (owner) => owner.replace(/\(NV.*?\)/gi, "").trim() === saleName
+  );
+  return matchedSales.flatMap((owner) => group.byOwner[owner].leads || []);
+}
+
+// 🔹 Render dropdown sale từ dữ liệu tổng
+function renderSaleDropdown() {
+  let filteredData = RAW_DATA;
+  const currentAccount =
+    localStorage.getItem("selectedAccount") || "Total Data";
+  if (currentAccount === "VTCI") {
+    filteredData = RAW_DATA.filter(
+      (l) => l.CustomField16Text?.trim().toUpperCase() == "VTCI"
+    );
+  } else if (currentAccount === "IDEAS") {
+    filteredData = RAW_DATA.filter(
+      (l) => l.CustomField16Text?.trim().toUpperCase() == "IDEAS"
+    );
+  }
+  const group = processCRMData(filteredData);
+  const saleDetailUI = document.querySelector(".sale_report");
+  const dropdown = saleDetailUI.querySelector(
+    ".saleperson_detail .dom_select_show"
+  );
+  dropdown.innerHTML = "";
+
+  Object.keys(group.byOwner).forEach((ownerKey) => {
+    const name = ownerKey.replace(/\(NV.*?\)/gi, "").trim();
+    const bgColor = getColorFromName(name);
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      name
+    )}&background=${bgColor}&color=fff&bold=true`;
+
+    const li = document.createElement("li");
+    li.dataset.owner = name;
+    li.innerHTML = `<img src="${avatarUrl}"/><span>${name}</span>`;
+
+    // Click chọn sale từ dropdown
+    li.addEventListener("click", () => {
+      const leads = filterBySaleExact(name);
+      processAndRenderAll(leads);
+      const saleDetailUI = dropdown.closest(".sale_report");
+      const img = saleDetailUI.querySelector("img");
+      const pName = saleDetailUI.querySelector(".dom_selected");
+      if (img) img.src = avatarUrl;
+      if (pName) pName.innerText = name;
+    });
+
+    dropdown.appendChild(li);
   });
 }
