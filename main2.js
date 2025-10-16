@@ -39,7 +39,7 @@ function waitForOTP() {
 }
 
 async function loginFlow(username, password) {
-  // ==== Bước 1: Login nhận temp token ====
+  // ==== STEP 1: Login để lấy temp token hoặc EmployeeCode ====
   const formData1 = new FormData();
   formData1.append("Username", username);
   formData1.append("Password", password);
@@ -51,15 +51,22 @@ async function loginFlow(username, password) {
   const data1 = await res1.json();
   console.log("Step 1 response:", data1);
 
+  // ✅ Nếu không có token mà có EmployeeCode → nhảy thẳng qua Step 3
   if (!data1.Data?.AccessToken?.Token) {
-    console.error("Không nhận được temp token!");
+    if (data1.Data?.User?.EmployeeCode) {
+      console.log("Không có temp token, nhưng có EmployeeCode → qua Step 3");
+      return await doStep3();
+    }
+    console.error("Không nhận được temp token và không có EmployeeCode!");
     return;
   }
+
+  // ✅ Có temp token → tiếp tục Step 2 (nhập OTP)
   const tempToken = data1.Data.AccessToken.Token;
   console.log("Temp Token:", tempToken);
 
-  // ==== Bước 2: Chờ người dùng nhập OTP qua UI ====
-  const otp = await waitForOTP();
+  // ==== STEP 2: Yêu cầu người dùng nhập OTP ====
+  const otp = await waitForOTP(); // Hàm này hiển thị input hoặc popup nhập OTP
 
   const formData2 = new FormData();
   formData2.append("OTP", otp);
@@ -77,23 +84,34 @@ async function loginFlow(username, password) {
     return;
   }
 
-  const accessToken = data2.Data.AccessToken?.Token;
-  console.log("Access Token chính thức:", accessToken);
+  console.log("Access Token chính thức:", data2.Data.AccessToken?.Token);
 
-  // ==== Bước 3: Lấy info user với token chính thức ====
+  // ==== STEP 3: Lấy token CRM chính ====
+  return await doStep3();
+}
+
+// 🔹 Hàm Step 3 tách riêng để tái sử dụng
+async function doStep3() {
   const res3 = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
     method: "POST",
   });
   const data3 = await res3.json();
   console.log("Step 3 response (User Info):", data3);
 
-  const token = data3.Data.token;
-  const refresh_token = data3.Data.refresh_token;
+  const token = data3.Data?.token;
+  const refresh_token = data3.Data?.refresh_token;
+
+  if (!token) {
+    console.error("Không lấy được token chính thức ở Step 3!");
+    return null;
+  }
+
   localStorage.setItem("misa_token", token);
   localStorage.setItem("misa_refresh_token", refresh_token);
 
   return { token, refresh_token };
 }
+
 async function quickLogin() {
   const response = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
     method: "POST",
@@ -121,59 +139,88 @@ async function quickLogin() {
 
   return token;
 }
-async function getToken(username, password) {
-  // 1️⃣ Kiểm tra localStorage
-  let token = localStorage.getItem("misa_token");
-  if (token) return token;
-  const qData = await quickLogin();
-  if (qData.length) return qData;
+async function getToken(username, password, forceLogin = false) {
+  // ⚙️ Nếu chưa có hoặc buộc loginFlow thì bỏ qua localStorage
+  if (!forceLogin) {
+    let token = localStorage.getItem("misa_token");
+    if (token) return token;
+
+    // ⚡ Thử quickLogin trước
+    const qData = await quickLogin();
+    if (qData?.length) return qData;
+  }
+
+  // 🔑 Thực hiện loginFlow khi bắt buộc hoặc quickLogin thất bại
   try {
-    const lData = await loginFlow("numt@ideas.edu.vn", "Hieunu11089091");
-    if (lData?.token) return lData.token;
+    const lData = await loginFlow(username, password);
+    if (lData?.token) {
+      localStorage.setItem("misa_token", lData.token);
+      return lData.token;
+    }
     throw new Error("LoginFlow không trả token");
   } catch (err) {
     console.error("LoginFlow thất bại:", err);
   }
 
-  // 4️⃣ Nếu vẫn không có token → yêu cầu nhập tay
-  token = prompt("Nhập token MISA:");
+  // 🧩 Nếu vẫn không có token → nhập tay
+  const token = prompt("Nhập token MISA:");
   if (!token) throw new Error("Người dùng không nhập token");
   localStorage.setItem("misa_token", token);
   return token;
 }
+
 async function fetchLeads(from, to) {
   const loading = document.querySelector(".loading");
   loading.classList.add("active");
 
   let data = null;
+  let usedQuickLogin = false;
 
   try {
-    // ✅ 1. Lấy token (nếu chưa có thì tạo mới)
-    let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
+    // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
+    let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+    usedQuickLogin = token;
 
-    // ✅ 2. Gọi API MISA Proxy
     const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-    const res = await fetch(url, { cache: "no-store" });
-    const json = await res.json();
+    let res = await fetch(url, { cache: "no-store" });
+    let json = await res.json();
 
+    // 🟢 Nếu có data thì xong
     if (json?.data?.length) {
       data = json.data;
       CRM_DATA = data;
     } else {
-      console.warn("Không có dữ liệu hoặc token lỗi:", json.error);
+      console.warn("Token có thể lỗi, thử loginFlow lại...");
       localStorage.removeItem("misa_token");
+
+      // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
+      if (usedQuickLogin) {
+        console.log("vô");
+
+        const newToken = await getToken(
+          "numt@ideas.edu.vn",
+          "Ideas123456",
+          true
+        );
+        const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
+        res = await fetch(retryUrl, { cache: "no-store" });
+        json = await res.json();
+
+        if (json?.data?.length) {
+          data = json.data;
+          CRM_DATA = data;
+        }
+      }
     }
   } catch (err) {
-    console.error("Lỗi khi fetch:", err);
+    console.error("❌ Lỗi fetchLeads:", err);
     localStorage.removeItem("misa_token");
   }
 
-  // ❌ Nếu không có dữ liệu
-  if (!data) {
-    alert(
-      "⚠️ IDEAS CRM không có phản hồi. Vui lòng kiểm tra lại proxy_misa.php hoặc token MISA!"
-    );
-  }
+  // ⚠️ Nếu vẫn không có dữ liệu
+  // if (!data) {
+  //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
+  // }
 
   loading.classList.remove("active");
   return data || [];
@@ -181,7 +228,7 @@ async function fetchLeads(from, to) {
 
 // const initRange = getDateRange("this_month");
 
-// fetchLeads(initRange.from, initRange.to, "numt@ideas.edu.vn", "Hieunu11089091");
+// fetchLeads(initRange.from, initRange.to, "numt@ideas.edu.vn", "Ideas123456");
 
 // ----------------------------------------
 // 🧠 Hàm xử lý tag
