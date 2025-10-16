@@ -68,26 +68,31 @@ body {
   background: #555555c7;
 }
 html {
-  font-size: 62.5%; /* default 10px */
+  font-size: 60%; /* default 10px */
   scroll-behavior: smooth;
 }
 
 /* Laptop 14 inch ~ 1366px width */
 @media (max-width: 1400px) {
   html {
-    font-size: 50%; /* 12px */
+    font-size: 55%; /* 12px */
   }
 }
 @media (max-width: 1700px) {
   html {
-    font-size: 50%; /* 12px */
+    font-size: 45%; /* 12px */
+  }
+}
+@media (max-width: 1800px) {
+  html {
+    font-size: 55%; /* 12px */
   }
 }
 
 /* Laptop nhỏ hơn 1280px */
 @media (max-width: 1280px) {
   html {
-    font-size: 50%; /* 12px */
+    font-size: 40%; /* 12px */
   }
 }
 
@@ -195,6 +200,7 @@ html {
 
 .dom_container {
   width: calc(98% - 28rem);
+  max-width: 1600px !important;
   overflow-y: auto;
   margin: auto;
   height: 100vh;
