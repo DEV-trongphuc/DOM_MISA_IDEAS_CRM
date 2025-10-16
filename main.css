@@ -115,7 +115,7 @@ html {
 }
 .dom_sidebar {
   width: 25rem;
-  background: white;
+  background: rgba(255, 255, 255, 0.8);
   padding: 2rem;
   flex-direction: column;
   gap: 2rem;
@@ -291,7 +291,12 @@ html {
   gap: 3rem;
   transition: 0.3s ease;
   margin-top: 1rem;
+  border: 1px solid transparent;
 }
+.dom_toplist > li:hover {
+  border: 1px solid #ffa900;
+}
+.toplist_more_ads,
 .toplist_more {
   font-size: 2rem;
   background-color: transparent;
@@ -374,6 +379,7 @@ html {
 }
 
 /* More icon */
+.dom_toplist > li > p.toplist_more_ads,
 .dom_toplist > li > p.toplist_more {
   text-align: right;
 }
@@ -684,11 +690,13 @@ tbody {
   left: 0;
   z-index: -1;
 }
-.toplist_more i {
+.toplist_more i,
+.toplist_more_ads i {
   font-size: 2rem;
-  color: #333;
+  color: #33333383;
   transition: 0.3s;
 }
+.toplist_more_ads i:hover,
 .toplist_more i:hover {
   color: var(--mainClr);
 }
@@ -1361,6 +1369,7 @@ tbody {
 .dom_container .dom_dashboard {
   /* transition: 0.3s ease; */
 }
+.dom_container .dom_dashboard.sale_detail_ads,
 .dom_container .dom_dashboard.sale_detail {
   position: fixed !important;
   background-color: var(--fadeClr);
@@ -1379,10 +1388,12 @@ tbody {
   display: none !important;
   padding-bottom: 3rem;
 }
+.dom_container .dom_dashboard.sale_detail_ads .dom_row,
 .dom_container .dom_dashboard.sale_detail .dom_row {
   display: flex !important;
 }
 
+.dom_container .dom_dashboard.sale_detail_ads .sale_report,
 .dom_container .dom_dashboard.sale_detail .sale_report {
   display: flex;
 }
@@ -1391,13 +1402,24 @@ tbody {
   font-size: 1.5rem;
   font-weight: bold;
   opacity: 0.8;
+  padding: 1.5rem 2rem;
+  background-color: #e6e6e693;
+  border-radius: 50rem;
 }
 .dom_select.saleperson_detail > img {
   width: 35px;
   height: 35px;
   border-radius: 50rem;
 }
-
+.dom_select.saleperson_detail.disable {
+  pointer-events: none;
+  box-shadow: unset;
+  font-size: 1.8rem;
+  opacity: 0.8;
+}
+.dom_select.saleperson_detail.disable i {
+  display: none;
+}
 .dom_select.saleperson_detail {
   padding: 0.5rem 1rem;
   border-radius: 50rem;
@@ -1436,4 +1458,16 @@ tbody {
 .sale_detail ~ .dom_overlay {
   opacity: 1;
   pointer-events: all;
+}
+.sale_detail_ads ~ .dom_overlay {
+  opacity: 1;
+  pointer-events: all;
+}
+.sale_detail_ads .saleperson_detail {
+  pointer-events: none;
+  box-shadow: unset;
+  opacity: 0.8;
+}
+.sale_detail_ads .saleperson_detail i {
+  display: none;
 }
