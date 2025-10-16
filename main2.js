@@ -109,35 +109,26 @@ async function quickLogin() {
 
   // Lấy token và refresh_token
   const token = data?.Data?.token;
-  const refresh_token = data?.Data?.refresh_token;
+  console.log("token", token);
 
-  if (token && refresh_token) {
+  if (token) {
     // ✅ Lưu vào localStorage
     localStorage.setItem("misa_token", token);
-    localStorage.setItem("misa_refresh_token", refresh_token);
     console.log("✅ Token và Refresh Token đã được lưu vào localStorage");
   } else {
     console.warn("⚠️ Không tìm thấy token trong phản hồi:", data);
   }
 
-  return { token, refresh_token };
+  return token 
 }
 async function getToken(username, password) {
   // 1️⃣ Kiểm tra localStorage
   let token = localStorage.getItem("misa_token");
   if (token) return token;
-
-  // 2️⃣ Thử quickLogin
-  try {
     const qData = await quickLogin();
-    if (qData?.token) return qData.token;
-  } catch (err) {
-    console.warn("QuickLogin không thành công:", err);
-  }
-
-  // 3️⃣ Nếu vẫn chưa có → gọi loginFlow với OTP
+    if (qData.length) return qData;
   try {
-    const lData = await loginFlow(username, password);
+    const lData = await loginFlow("numt@ideas.edu.vn", "Hieunu11089091");
     if (lData?.token) return lData.token;
     throw new Error("LoginFlow không trả token");
   } catch (err) {
@@ -153,13 +144,11 @@ async function getToken(username, password) {
 async function fetchLeads(
   from,
   to,
-  username = "numt@ideas.edu.vn",
-  password = "Hieunu11089091"
 ) {
   document.querySelector(".loading").classList.add("active");
 
   // Lấy token 1 lần
-  let token = await getToken(username, password);
+  let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
 
   const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
   const res = await fetch(url);
