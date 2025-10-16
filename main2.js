@@ -147,8 +147,8 @@ async function fetchLeads(from, to) {
   // Lấy token 1 lần
   let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
 
-  // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-  const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
+  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
   const res = await fetch(url);
   const data = await res.json();
 
