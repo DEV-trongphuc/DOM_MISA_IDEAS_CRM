@@ -1421,7 +1421,7 @@ tbody {
   display: none;
 }
 .dom_select.saleperson_detail {
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.5rem;
   border-radius: 50rem;
   min-width: 30rem;
   padding-right: 3rem;
@@ -1470,4 +1470,8 @@ tbody {
 }
 .sale_detail_ads .saleperson_detail i {
   display: none;
+}
+.sale_detail_ads .toplist_more_ads {
+  opacity: 0.6;
+  pointer-events: none;
 }
