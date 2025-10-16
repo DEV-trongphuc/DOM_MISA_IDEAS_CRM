@@ -142,26 +142,50 @@ async function getToken(username, password) {
   return token;
 }
 async function fetchLeads(from, to) {
-  document.querySelector(".loading").classList.add("active");
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
 
-  // Lấy token 1 lần
-  let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
+  let attempts = 0;
+  let data = null;
 
-  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
-  const res = await fetch(url);
-  const data = await res.json();
+  while (attempts < 3) {
+    try {
+      // ✅ 1. Lấy token (nếu chưa có thì tạo mới)
+      let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
 
-  // Nếu có dữ liệu thì gán vào CRM_DATA
-  if (data.data?.length) {
-    CRM_DATA = data.data;
-  } else {
-    console.warn("Không có dữ liệu hoặc token lỗi:", data.error);
-    localStorage.removeItem("misa_token");
+      // ✅ 2. Gọi API MISA Proxy
+      const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+      const res = await fetch(url, { cache: "no-store" });
+      const json = await res.json();
+
+      if (json?.data?.length) {
+        data = json.data;
+        CRM_DATA = data;
+        break; // ✅ có dữ liệu thì thoát vòng lặp
+      } else {
+        console.warn(
+          `Lần ${attempts + 1}: Không có dữ liệu hoặc token lỗi`,
+          json.error
+        );
+        localStorage.removeItem("misa_token");
+      }
+    } catch (err) {
+      console.error(`Lỗi khi fetch (lần ${attempts + 1}):`, err);
+      localStorage.removeItem("misa_token");
+    }
+
+    attempts++;
   }
 
-  document.querySelector(".loading").classList.remove("active");
-  return CRM_DATA;
+  // ❌ Nếu sau 3 lần vẫn không được
+  if (!data) {
+    alert(
+      "⚠️ IDEAS CRM không có phản hồi. Vui lòng kiểm tra lại proxy_misa.php hoặc token MISA!"
+    );
+  }
+
+  loading.classList.remove("active");
+  return data || [];
 }
 
 // const initRange = getDateRange("this_month");
