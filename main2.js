@@ -145,39 +145,30 @@ async function fetchLeads(from, to) {
   const loading = document.querySelector(".loading");
   loading.classList.add("active");
 
-  let attempts = 0;
   let data = null;
 
-  while (attempts < 3) {
-    try {
-      // ✅ 1. Lấy token (nếu chưa có thì tạo mới)
-      let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
+  try {
+    // ✅ 1. Lấy token (nếu chưa có thì tạo mới)
+    let token = await getToken("numt@ideas.edu.vn", "Hieunu11089091");
 
-      // ✅ 2. Gọi API MISA Proxy
-      const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-      const res = await fetch(url, { cache: "no-store" });
-      const json = await res.json();
+    // ✅ 2. Gọi API MISA Proxy
+    const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+    const res = await fetch(url, { cache: "no-store" });
+    const json = await res.json();
 
-      if (json?.data?.length) {
-        data = json.data;
-        CRM_DATA = data;
-        break; // ✅ có dữ liệu thì thoát vòng lặp
-      } else {
-        console.warn(
-          `Lần ${attempts + 1}: Không có dữ liệu hoặc token lỗi`,
-          json.error
-        );
-        localStorage.removeItem("misa_token");
-      }
-    } catch (err) {
-      console.error(`Lỗi khi fetch (lần ${attempts + 1}):`, err);
+    if (json?.data?.length) {
+      data = json.data;
+      CRM_DATA = data;
+    } else {
+      console.warn("Không có dữ liệu hoặc token lỗi:", json.error);
       localStorage.removeItem("misa_token");
     }
-
-    attempts++;
+  } catch (err) {
+    console.error("Lỗi khi fetch:", err);
+    localStorage.removeItem("misa_token");
   }
 
-  // ❌ Nếu sau 3 lần vẫn không được
+  // ❌ Nếu không có dữ liệu
   if (!data) {
     alert(
       "⚠️ IDEAS CRM không có phản hồi. Vui lòng kiểm tra lại proxy_misa.php hoặc token MISA!"
