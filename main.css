@@ -552,6 +552,9 @@ table tbody tr:nth-child(2n) {
 table tbody tr:hover {
   background-color: #ffe1a477;
 }
+table tbody td {
+  padding-left: 1rem;
+}
 table td,
 table th {
   background: linear-gradient(
@@ -1399,6 +1402,7 @@ tbody {
   padding: 0.5rem 1rem;
   border-radius: 50rem;
   min-width: 30rem;
+  padding-right: 3rem;
 }
 .dom_select.saleperson_detail .dom_select_show > li img {
   width: 35px;
