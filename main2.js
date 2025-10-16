@@ -119,14 +119,14 @@ async function quickLogin() {
     console.warn("⚠️ Không tìm thấy token trong phản hồi:", data);
   }
 
-  return token 
+  return token;
 }
 async function getToken(username, password) {
   // 1️⃣ Kiểm tra localStorage
   let token = localStorage.getItem("misa_token");
   if (token) return token;
-    const qData = await quickLogin();
-    if (qData.length) return qData;
+  const qData = await quickLogin();
+  if (qData.length) return qData;
   try {
     const lData = await loginFlow("numt@ideas.edu.vn", "Hieunu11089091");
     if (lData?.token) return lData.token;
@@ -141,10 +141,7 @@ async function getToken(username, password) {
   localStorage.setItem("misa_token", token);
   return token;
 }
-async function fetchLeads(
-  from,
-  to,
-) {
+async function fetchLeads(from, to) {
   document.querySelector(".loading").classList.add("active");
 
   // Lấy token 1 lần
@@ -309,8 +306,9 @@ const currentFilter = { campaign: null, source: null, medium: null };
 
 async function main() {
   const initRange = getDateRange("this_month");
-
   RAW_DATA = await fetchLeads(initRange.from, initRange.to);
+  const dateText = document.querySelector(".dom_date");
+  dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
 
   await processAndRenderAll(RAW_DATA);
   setupTimeDropdown();
