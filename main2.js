@@ -340,7 +340,7 @@ async function main() {
   performance.mark("start_main");
 
   // 🗓 Lấy khoảng ngày mặc định
-  const initRange = getDateRange("this_month");
+  const initRange = getDateRange("this_week");
   const dateText = document.querySelector(".dom_date");
   dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
 
