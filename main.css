@@ -1431,7 +1431,7 @@ tbody {
 }
 .dom_ai_report.active {
   position: fixed !important;
-  background-color: white;
+  background: #fffef9;
   z-index: 99999999999999;
   top: 50%;
   transform: translateY(-50%);
@@ -1714,7 +1714,7 @@ tbody {
 .dom_overlay h5 {
   display: flex;
   align-items: center;
-  color: white;
+  color: rgba(255, 255, 255, 0.473);
   height: 100%;
   padding-left: 8rem;
   font-size: 1.6rem;
