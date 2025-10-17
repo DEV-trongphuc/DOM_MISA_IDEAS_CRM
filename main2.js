@@ -169,64 +169,6 @@ async function getToken(username, password, forceLogin = false) {
   localStorage.setItem("misa_token", token);
   return token;
 }
-async function fetchLeads(from, to) {
-  const loading = document.querySelector(".loading");
-  loading.classList.add("active");
-
-  let data = null;
-  let usedQuickLogin = false;
-
-  try {
-    let token = "";
-    // let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
-    usedQuickLogin = token;
-
-    // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-    const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
-    let res = await fetch(url, { cache: "no-store" });
-    let json = await res.json();
-
-    // 🟢 Nếu có data thì xong
-    if (json?.data?.length) {
-      data = json.data;
-      CRM_DATA = data;
-    } else {
-      console.warn("Token có thể lỗi, thử loginFlow lại...");
-      localStorage.removeItem("misa_token");
-
-      // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
-      if (usedQuickLogin) {
-        console.log("vô");
-
-        const newToken = await getToken(
-          "numt@ideas.edu.vn",
-          "Ideas123456",
-          true
-        );
-        const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
-        res = await fetch(retryUrl, { cache: "no-store" });
-        json = await res.json();
-
-        if (json?.data?.length) {
-          data = json.data;
-          CRM_DATA = data;
-        }
-      }
-    }
-  } catch (err) {
-    console.error("❌ Lỗi fetchLeads:", err);
-    alert("Không thể kết nối IDEAS.EDU.VN");
-    localStorage.removeItem("misa_token");
-  }
-
-  // ⚠️ Nếu vẫn không có dữ liệu
-  // if (!data) {
-  //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
-  // }
-
-  loading.classList.remove("active");
-  return data || [];
-}
 // async function fetchLeads(from, to) {
 //   const loading = document.querySelector(".loading");
 //   loading.classList.add("active");
@@ -235,11 +177,12 @@ async function fetchLeads(from, to) {
 //   let usedQuickLogin = false;
 
 //   try {
-//     // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
-//     let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+//     let token = "";
+//     // let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
 //     usedQuickLogin = token;
 
-//     const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+//     // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+//     const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
 //     let res = await fetch(url, { cache: "no-store" });
 //     let json = await res.json();
 
@@ -272,7 +215,7 @@ async function fetchLeads(from, to) {
 //     }
 //   } catch (err) {
 //     console.error("❌ Lỗi fetchLeads:", err);
-//     alert("Không thể kết nối IDEAS.EDU.VN")
+//     alert("Không thể kết nối IDEAS.EDU.VN");
 //     localStorage.removeItem("misa_token");
 //   }
 
@@ -284,6 +227,64 @@ async function fetchLeads(from, to) {
 //   loading.classList.remove("active");
 //   return data || [];
 // }
+
+async function fetchLeads(from, to) {
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
+
+  let data = null;
+  let usedQuickLogin = false;
+
+  try {
+    // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
+    let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+    usedQuickLogin = token;
+
+    const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+    let res = await fetch(url, { cache: "no-store" });
+    let json = await res.json();
+
+    // 🟢 Nếu có data thì xong
+    if (json?.data?.length) {
+      data = json.data;
+      CRM_DATA = data;
+    } else {
+      console.warn("Token có thể lỗi, thử loginFlow lại...");
+      localStorage.removeItem("misa_token");
+
+      // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
+      if (usedQuickLogin) {
+        console.log("vô");
+
+        const newToken = await getToken(
+          "numt@ideas.edu.vn",
+          "Ideas123456",
+          true
+        );
+        const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
+        res = await fetch(retryUrl, { cache: "no-store" });
+        json = await res.json();
+
+        if (json?.data?.length) {
+          data = json.data;
+          CRM_DATA = data;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("❌ Lỗi fetchLeads:", err);
+    alert("Không thể kết nối IDEAS.EDU.VN")
+    localStorage.removeItem("misa_token");
+  }
+
+  // ⚠️ Nếu vẫn không có dữ liệu
+  // if (!data) {
+  //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
+  // }
+
+  loading.classList.remove("active");
+  return data || [];
+}
 
 // const initRange = getDateRange("this_month");
 
