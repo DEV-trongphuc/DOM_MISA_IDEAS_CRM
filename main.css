@@ -1467,13 +1467,28 @@ tbody {
   position: fixed;
   width: 100vw;
   height: 100vh;
-  background-color: rgb(0, 0, 0, 0.3);
+  background-color: rgb(0, 0, 0, 0.5);
   top: 0;
   left: 0;
   opacity: 0;
   pointer-events: none;
   transition: 0.3s ease;
   z-index: 999;
+}
+.dom_overlay:hover {
+  background-color: rgb(0, 0, 0, 0.45);
+}
+.dom_overlay h5 {
+  display: flex;
+  align-items: center;
+  color: white;
+  height: 100%;
+  padding-left: 8rem;
+  font-size: 1.6rem;
+  cursor: pointer;
+}
+.dom_overlay h5 i {
+  padding-right: 1rem;
 }
 .sale_detail ~ .dom_overlay {
   opacity: 1;
