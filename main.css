@@ -1426,6 +1426,9 @@ tbody {
 .dom_ai_report_close:hover {
   color: var(--mainClr);
 }
+.dom_bold {
+  font-weight: bold;
+}
 .dom_ai_report.active {
   position: fixed !important;
   background-color: white;
@@ -1436,8 +1439,9 @@ tbody {
   border-radius: 5px;
   width: calc(98% - 25rem);
   padding: 4rem;
+  padding-right: 2rem;
   box-shadow: 0 0 5px rgb(0, 0, 0, 0.3);
-  overflow-y: auto;
+  overflow-y: hidden;
   height: 100vh;
 
   /* Hiệu ứng trượt ra (mở) */
@@ -1533,6 +1537,8 @@ tbody {
   font-size: 2rem;
   font-weight: bold;
   color: #313131e0;
+  display: flex;
+  align-items: center;
 }
 .ai_report_block.vtci {
   margin-top: 15rem;
@@ -1567,6 +1573,7 @@ tbody {
   height: 90vh;
   padding-bottom: 15rem;
   overflow: auto;
+  padding-right: 2rem;
 }
 .dom_ai_report h4 {
   display: flex;
@@ -1582,6 +1589,8 @@ tbody {
 }
 .dom_ai_report h3 i {
   color: var(--mainClr);
+  font-size: 3rem;
+  margin-right: 1rem;
 }
 
 .sale_report {
