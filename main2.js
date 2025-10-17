@@ -582,7 +582,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   // 🎯 Tổng thể lead
   if (qualityRateTotal < 20)
     insightItems.push(
-      `Tỷ lệ lead tổng thể thấp (${qualityRateTotal}%) — cần xem lại quy trình lọc lead và chiến dịch.`
+      `Tỷ lệ lead tổng thể thấp (${qualityRateTotal}%) — cần xem lại tệp đối tượng quảng cáo.`
     );
   else if (qualityRateTotal <= 45)
     insightItems.push(
@@ -590,13 +590,13 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
     );
   else
     insightItems.push(
-      `Tỷ lệ lead chất lượng cao (${qualityRateTotal}%) — dữ liệu đầu vào đang tốt.`
+      `Tỷ lệ lead chất lượng cao (${qualityRateTotal}%) — dữ liệu hiệu suất quảng cáo đang tốt.`
     );
 
   // 🧹 Lead rác
   if (junkRate > 15)
     insightItems.push(
-      `Lead rác chiếm ${junkRate}% — cần điều chỉnh target chiến dịch.`
+      `Lead rác chiếm ${junkRate}% — cần điều chỉnh target hoặc thay đổi chiến dịch.`
     );
 
   // ⚖️ So sánh Sale cao - thấp
@@ -607,7 +607,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
       lowSaleByQuality.owner
     } (${lowSaleByQuality.qualityRate.toFixed(
       1
-    )}%)</strong> là <strong>${saleGap}%</strong> — cần training đồng đều hơn.`
+    )}%)</strong> là <strong>${saleGap}%</strong>.`
   );
 
   // 📈 Ngày cao điểm
