@@ -148,6 +148,7 @@ async function getToken(username, password, forceLogin = false) {
     // ⚡ Thử quickLogin trước
     const qData = await quickLogin();
     if (qData?.length) return qData;
+    console.log("OHNO");
   }
 
   // 🔑 Thực hiện loginFlow khi bắt buộc hoặc quickLogin thất bại
@@ -168,7 +169,6 @@ async function getToken(username, password, forceLogin = false) {
   localStorage.setItem("misa_token", token);
   return token;
 }
-
 async function fetchLeads(from, to) {
   const loading = document.querySelector(".loading");
   loading.classList.add("active");
@@ -177,11 +177,12 @@ async function fetchLeads(from, to) {
   let usedQuickLogin = false;
 
   try {
-    // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
-    let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+    let token = "";
+    // let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
     usedQuickLogin = token;
 
-    const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+    // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+    const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
     let res = await fetch(url, { cache: "no-store" });
     let json = await res.json();
 
@@ -214,6 +215,7 @@ async function fetchLeads(from, to) {
     }
   } catch (err) {
     console.error("❌ Lỗi fetchLeads:", err);
+    alert("Không thể kết nối IDEAS.EDU.VN");
     localStorage.removeItem("misa_token");
   }
 
@@ -225,6 +227,63 @@ async function fetchLeads(from, to) {
   loading.classList.remove("active");
   return data || [];
 }
+// async function fetchLeads(from, to) {
+//   const loading = document.querySelector(".loading");
+//   loading.classList.add("active");
+
+//   let data = null;
+//   let usedQuickLogin = false;
+
+//   try {
+//     // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
+//     let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+//     usedQuickLogin = token;
+
+//     const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+//     let res = await fetch(url, { cache: "no-store" });
+//     let json = await res.json();
+
+//     // 🟢 Nếu có data thì xong
+//     if (json?.data?.length) {
+//       data = json.data;
+//       CRM_DATA = data;
+//     } else {
+//       console.warn("Token có thể lỗi, thử loginFlow lại...");
+//       localStorage.removeItem("misa_token");
+
+//       // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
+//       if (usedQuickLogin) {
+//         console.log("vô");
+
+//         const newToken = await getToken(
+//           "numt@ideas.edu.vn",
+//           "Ideas123456",
+//           true
+//         );
+//         const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
+//         res = await fetch(retryUrl, { cache: "no-store" });
+//         json = await res.json();
+
+//         if (json?.data?.length) {
+//           data = json.data;
+//           CRM_DATA = data;
+//         }
+//       }
+//     }
+//   } catch (err) {
+//     console.error("❌ Lỗi fetchLeads:", err);
+//     alert("Không thể kết nối IDEAS.EDU.VN")
+//     localStorage.removeItem("misa_token");
+//   }
+
+//   // ⚠️ Nếu vẫn không có dữ liệu
+//   // if (!data) {
+//   //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
+//   // }
+
+//   loading.classList.remove("active");
+//   return data || [];
+// }
 
 // const initRange = getDateRange("this_month");
 
@@ -277,69 +336,106 @@ const currentFilter = { campaign: null, source: null, medium: null };
 // ----------------------------------------
 
 async function main() {
+  performance.mark("start_main");
+
+  // 🗓 Lấy khoảng ngày mặc định
   const initRange = getDateRange("this_month");
-  RAW_DATA = await fetchLeads(initRange.from, initRange.to);
   const dateText = document.querySelector(".dom_date");
   dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
 
+  // ⏳ Hiển thị loading sớm
+  document.querySelector(".loading")?.classList.add("active");
+
+  // 📥 Fetch dữ liệu
+  const t0 = performance.now();
+  RAW_DATA = await fetchLeads(initRange.from, initRange.to);
+  console.log(`✅ FetchLeads done in ${(performance.now() - t0).toFixed(1)}ms`);
+
+  // 🧠 Xử lý & render
   await processAndRenderAll(RAW_DATA);
+
+  // ⚙️ Khởi tạo UI control
   setupTimeDropdown();
   setupAccountFilter();
   setupClearFilter();
   setupQualityFilter();
   setupLeadSearch();
   setupDropdowns();
+
+  performance.mark("end_main");
+  console.log(
+    "⏱ Total main():",
+    performance.measure("main_total", "start_main", "end_main")
+  );
 }
+
 main();
 async function processAndRenderAll(data) {
-  // ⚡ 1. Xử lý dữ liệu thật nhanh
+  if (!data?.length) return console.warn("Không có dữ liệu hợp lệ để xử lý");
+
+  console.time("processCRMData");
   GROUPED = processCRMData(data);
+  console.timeEnd("processCRMData");
   window.grouped = GROUPED;
 
-  // 🧩 2. Render chart trước — nhưng chia nhỏ từng nhóm để tránh lag
+  // 🧩 Render chart mượt mà & ưu tiên theo độ quan trọng
   queueMicrotask(() => renderChartsSmoothly(GROUPED, data));
 
-  // 🧱 3. Render bảng & filter sau cùng (ít ảnh hưởng hiệu năng)
+  // 🧱 Render bảng và filter cuối để không chặn main thread
   requestAnimationFrame(() => {
     renderLeadTable(data);
     renderFilterOptions(data);
     renderSaleFilter(GROUPED);
   });
 }
-
 // 🧠 Hàm render chart chia nhỏ batch – không chặn main thread
 function renderChartsSmoothly(GROUPED, data) {
   const chartTasks = [
     () => renderLeadTrendChart(GROUPED),
-    () => renderToplist(GROUPED),
-    () => renderToplistBySale(GROUPED),
     () => renderLeadQualityMeter(GROUPED),
     () => renderCampaignPieChart(GROUPED),
+    () => renderToplist(GROUPED),
+    () => renderToplistBySale(GROUPED),
     () => renderTagFrequency(GROUPED),
     () => renderProgramChart(GROUPED),
     () => renderLeadTagChart(GROUPED),
     () => renderDegreeChart(data),
   ];
 
-  let delay = 0;
+  let idx = 0;
+  const total = chartTasks.length;
 
-  // ⚙️ render rải rác từng chart 1
-  for (const task of chartTasks) {
-    setTimeout(() => {
-      // Chạy chart trong thời điểm idle nếu có
-      if ("requestIdleCallback" in window) {
-        requestIdleCallback(() => task());
-      } else {
-        requestAnimationFrame(() => task());
-      }
-    }, delay);
-    delay += 50; // mỗi chart cách nhau 50ms giúp UI không lag
-  }
+  const next = () => {
+    if (idx >= total) return;
+    const task = chartTasks[idx++];
+
+    // Dùng requestIdleCallback nếu có, fallback sang RAF
+    if ("requestIdleCallback" in window) {
+      requestIdleCallback(
+        () => {
+          task();
+          requestAnimationFrame(next);
+        },
+        { timeout: 200 }
+      );
+    } else {
+      setTimeout(() => {
+        task();
+        next();
+      }, 40);
+    }
+  };
+
+  // ⚡ Start nhanh chart đầu tiên
+  queueMicrotask(() => {
+    chartTasks[0]?.();
+    idx = 1;
+    next();
+  });
 }
-
 function processCRMData(data) {
-  const loadingEl = document.querySelector(".loading");
-  if (loadingEl) loadingEl.classList.add("active");
+  // const loadingEl = document.querySelector(".loading");
+  // loadingEl?.classList.add("active");
 
   const r = {
     byDate: Object.create(null),
@@ -352,22 +448,24 @@ function processCRMData(data) {
   };
 
   const len = data.length;
-  const tagPriorityLocal = tagPriority || [];
+  if (!len) return r;
 
-  // Giảm overhead của function call
+  const tagPriorityLocal = tagPriority || [];
   const getTagsArrayLocal = getTagsArray;
   const getPrimaryTagLocal = getPrimaryTag;
 
+  // Cache cho performance (hạn chế tạo object tạm, truy cập property sâu)
   for (let i = 0; i < len; i++) {
     const lead = data[i];
 
-    // Cache thuộc tính, tránh truy cập object lặp lại
+    // ==== Chuẩn bị dữ liệu nhanh ====
     const created = lead.CreatedDate;
     const date = created ? created.slice(0, 10) : "Date";
+
     const tags = getTagsArrayLocal(lead.TagIDText);
     let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
     if (mainTag === "Qualified") mainTag = "Needed";
-    if (!tags.length) tags.push("Untag");
+    if (tags.length === 0) tags.push("Untag");
     lead.TagMain = mainTag;
 
     const org = lead.CustomField16Text || "Org";
@@ -375,63 +473,73 @@ function processCRMData(data) {
     const source = lead.CustomField14Text || "Source";
     const medium = lead.CustomField15Text || "Medium";
 
-    // Lấy owner gốc
     const ownerFull = lead.OwnerIDText || "No Owner";
-    // Làm sạch tên owner chỉ dùng cho key
     const ownerKey = ownerFull.replace(/\s*\(NV.*?\)\s*/gi, "").trim();
 
-    // === Tag Frequency ===
-    for (let j = 0; j < tags.length; j++) {
+    // ==== 1️⃣ Tag Frequency ====
+    for (let j = 0, tlen = tags.length; j < tlen; j++) {
       const tag = tags[j];
-      r.tagFrequency[tag] = (r.tagFrequency[tag] || 0) + 1;
+      const count = r.tagFrequency[tag];
+      r.tagFrequency[tag] = count ? count + 1 : 1;
     }
 
-    // === byDate ===
-    const dateObj = (r.byDate[date] ||= { total: 0 });
+    // ==== 2️⃣ byDate ====
+    let dateObj = r.byDate[date];
+    if (!dateObj) dateObj = r.byDate[date] = { total: 0 };
     dateObj.total++;
     dateObj[mainTag] = (dateObj[mainTag] || 0) + 1;
 
-    // === byTag ===
+    // ==== 3️⃣ byTag ====
     (r.byTag[mainTag] ||= []).push(lead);
 
-    // === byTagAndDate ===
-    const tagDateObj = (r.byTagAndDate[mainTag] ||= Object.create(null));
-    (tagDateObj[date] ||= []).push(lead);
+    // ==== 4️⃣ byTagAndDate ====
+    let tagGroup = r.byTagAndDate[mainTag];
+    if (!tagGroup) tagGroup = r.byTagAndDate[mainTag] = Object.create(null);
+    (tagGroup[date] ||= []).push(lead);
 
-    // === byCampaign ===
-    const campObj = (r.byCampaign[campaign] ||= Object.create(null));
-    const sourceObj = (campObj[source] ||= Object.create(null));
+    // ==== 5️⃣ byCampaign ====
+    let campObj = r.byCampaign[campaign];
+    if (!campObj) campObj = r.byCampaign[campaign] = Object.create(null);
+    let sourceObj = campObj[source];
+    if (!sourceObj) sourceObj = campObj[source] = Object.create(null);
     (sourceObj[medium] ||= []).push(lead);
 
-    // === byOwner (chỉ dùng ownerKey cho key) ===
-    const ownerObj = (r.byOwner[ownerKey] ||= {
-      total: 0,
-      tags: Object.create(null),
-      leads: [],
-    });
+    // ==== 6️⃣ byOwner ====
+    let ownerObj = r.byOwner[ownerKey];
+    if (!ownerObj) {
+      ownerObj = r.byOwner[ownerKey] = {
+        total: 0,
+        tags: Object.create(null),
+        leads: [],
+      };
+    }
     ownerObj.total++;
     ownerObj.leads.push(lead);
 
-    const ownerTagObj = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
+    let ownerTagObj = ownerObj.tags[mainTag];
+    if (!ownerTagObj)
+      ownerTagObj = ownerObj.tags[mainTag] = { count: 0, leads: [] };
     ownerTagObj.count++;
     ownerTagObj.leads.push(lead);
 
-    // === byOrg ===
-    const orgObj = (r.byOrg[org] ||= {
-      total: 0,
-      tags: Object.create(null),
-      owners: Object.create(null),
-      byDate: Object.create(null),
-    });
+    // ==== 7️⃣ byOrg ====
+    let orgObj = r.byOrg[org];
+    if (!orgObj) {
+      orgObj = r.byOrg[org] = {
+        total: 0,
+        tags: Object.create(null),
+        owners: Object.create(null),
+        byDate: Object.create(null),
+      };
+    }
     orgObj.total++;
     (orgObj.tags[mainTag] ||= []).push(lead);
-    (orgObj.owners[ownerKey] ||= []).push(lead); // key sạch
+    (orgObj.owners[ownerKey] ||= []).push(lead);
     (orgObj.byDate[date] ||= []).push(lead);
   }
 
-  setTimeout(() => {
-    if (loadingEl) loadingEl.classList.remove("active");
-  }, 300);
+  // Dọn loading nhẹ nhàng sau 1 tick
+  // setTimeout(() => loadingEl?.classList.remove("active"), 150);
 
   return r;
 }
@@ -2285,29 +2393,38 @@ function renderLeadTable(leads) {
     "Description",
   ];
 
-  // 🧱 Khởi tạo bảng cơ bản trước (để user thấy khung nhanh)
+  // 🧱 Khởi tạo bảng cơ bản
   container.innerHTML = `
-    <div class="dom_table_container">
+    <div class="dom_table_container scrollable">
       <table id="main_table">
         <thead>
           <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
         </thead>
         <tbody></tbody>
         <tfoot>
-          <tr><td colspan="${
-            headers.length
-          }">Đang tải ${leads.length.toLocaleString()} leads...</td></tr>
+          <tr>
+            <td colspan="3">
+              Hiển thị <span class="loaded_count">0</span> / ${leads.length.toLocaleString()} leads
+            </td>
+             <td colspan="${headers.length - 3}"> </td>
+          </tr>
         </tfoot>
       </table>
     </div>`;
 
   const tbody = container.querySelector("tbody");
-  const tfoot = container.querySelector("tfoot");
-  let index = 0;
-  const chunk = 300; // render 300 dòng/lần
+  const loadedCountEl = container.querySelector(".loaded_count");
+  const wrapper = container.querySelector(".dom_table_container");
 
-  function renderChunk() {
-    const end = Math.min(index + chunk, leads.length);
+  // ⚙️ Biến trạng thái
+  let index = 0;
+  const INITIAL_CHUNK = 20; // hiển thị ban đầu
+  const SCROLL_CHUNK = 50; // mỗi lần scroll thêm
+  let isLoading = false;
+
+  // 🧩 Render batch
+  function renderChunk(count) {
+    const end = Math.min(index + count, leads.length);
     let html = "";
 
     for (let i = index; i < end; i++) {
@@ -2330,7 +2447,7 @@ function renderLeadTable(leads) {
         ? new Date(CreatedDate).toLocaleDateString("vi-VN")
         : "-";
 
-      // 🏷️ Tags giữ nguyên màu + class UI
+      // 🏷️ Tags giữ nguyên class & màu
       let tagHtml = "-";
       if (TagIDText?.trim()) {
         const tags = TagIDText.split(",")
@@ -2372,29 +2489,26 @@ function renderLeadTable(leads) {
         </tr>`;
     }
 
-    // ⚙️ Append 1 lần (tối ưu DOM)
     tbody.insertAdjacentHTML("beforeend", html);
     index = end;
-
-    if (index < leads.length) {
-      // tiếp tục render phần còn lại khi browser rảnh
-      requestIdleCallback(renderChunk);
-    } else {
-      // ✅ Cập nhật footer cuối cùng
-      tfoot.innerHTML = `
-        <tr>
-          <td colspan="3">
-            <strong>Total: ${leads.length.toLocaleString("en-US")} lead${
-        leads.length > 1 ? "s" : ""
-      }</strong>
-          </td>
-          <td colspan="${headers.length - 3}"></td>
-        </tr>`;
-    }
+    loadedCountEl.textContent = index.toLocaleString("en-US");
+    isLoading = false;
   }
 
-  // bắt đầu render
-  renderChunk();
+  // 🔹 Render đợt đầu
+  renderChunk(INITIAL_CHUNK);
+
+  // 🔹 Scroll event: lazy load tiếp
+  wrapper.addEventListener("scroll", () => {
+    if (isLoading) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = wrapper;
+    const nearBottom = scrollHeight - scrollTop - clientHeight < 200; // cách đáy < 200px
+    if (nearBottom && index < leads.length) {
+      isLoading = true;
+      requestAnimationFrame(() => renderChunk(SCROLL_CHUNK));
+    }
+  });
 }
 
 // ======================  CHART ======================
