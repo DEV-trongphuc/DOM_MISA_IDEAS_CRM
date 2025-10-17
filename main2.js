@@ -169,6 +169,65 @@ async function getToken(username, password, forceLogin = false) {
   localStorage.setItem("misa_token", token);
   return token;
 }
+async function fetchLeads(from, to) {
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
+
+  let data = null;
+  let usedQuickLogin = false;
+
+  try {
+    let token = "";
+    // let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+    usedQuickLogin = token;
+
+    // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+    const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
+    let res = await fetch(url, { cache: "no-store" });
+    let json = await res.json();
+
+    // 🟢 Nếu có data thì xong
+    if (json?.data?.length) {
+      data = json.data;
+      CRM_DATA = data;
+    } else {
+      console.warn("Token có thể lỗi, thử loginFlow lại...");
+      localStorage.removeItem("misa_token");
+
+      // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
+      if (usedQuickLogin) {
+        console.log("vô");
+
+        const newToken = await getToken(
+          "numt@ideas.edu.vn",
+          "Ideas123456",
+          true
+        );
+        const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
+        res = await fetch(retryUrl, { cache: "no-store" });
+        json = await res.json();
+
+        if (json?.data?.length) {
+          data = json.data;
+          CRM_DATA = data;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("❌ Lỗi fetchLeads:", err);
+    alert("Không thể kết nối IDEAS.EDU.VN");
+    localStorage.removeItem("misa_token");
+  }
+
+  // ⚠️ Nếu vẫn không có dữ liệu
+  // if (!data) {
+  //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
+  // }
+
+  loading.classList.remove("active");
+  return data || [];
+}
+
 // async function fetchLeads(from, to) {
 //   const loading = document.querySelector(".loading");
 //   loading.classList.add("active");
@@ -177,12 +236,11 @@ async function getToken(username, password, forceLogin = false) {
 //   let usedQuickLogin = false;
 
 //   try {
-//     let token = "";
-//     // let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+//     // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
+//     let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
 //     usedQuickLogin = token;
 
-//     // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-//     const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
+//     const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
 //     let res = await fetch(url, { cache: "no-store" });
 //     let json = await res.json();
 
@@ -227,64 +285,6 @@ async function getToken(username, password, forceLogin = false) {
 //   loading.classList.remove("active");
 //   return data || [];
 // }
-
-async function fetchLeads(from, to) {
-  const loading = document.querySelector(".loading");
-  loading.classList.add("active");
-
-  let data = null;
-  let usedQuickLogin = false;
-
-  try {
-    // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
-    let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
-    usedQuickLogin = token;
-
-    const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-    let res = await fetch(url, { cache: "no-store" });
-    let json = await res.json();
-
-    // 🟢 Nếu có data thì xong
-    if (json?.data?.length) {
-      data = json.data;
-      CRM_DATA = data;
-    } else {
-      console.warn("Token có thể lỗi, thử loginFlow lại...");
-      localStorage.removeItem("misa_token");
-
-      // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
-      if (usedQuickLogin) {
-        console.log("vô");
-
-        const newToken = await getToken(
-          "numt@ideas.edu.vn",
-          "Ideas123456",
-          true
-        );
-        const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
-        res = await fetch(retryUrl, { cache: "no-store" });
-        json = await res.json();
-
-        if (json?.data?.length) {
-          data = json.data;
-          CRM_DATA = data;
-        }
-      }
-    }
-  } catch (err) {
-    console.error("❌ Lỗi fetchLeads:", err);
-    alert("Không thể kết nối IDEAS.EDU.VN")
-    localStorage.removeItem("misa_token");
-  }
-
-  // ⚠️ Nếu vẫn không có dữ liệu
-  // if (!data) {
-  //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
-  // }
-
-  loading.classList.remove("active");
-  return data || [];
-}
 
 // const initRange = getDateRange("this_month");
 
@@ -428,24 +428,23 @@ function generateAdvancedReport(RAW_DATA) {
 // 🧠 HÀM PHÂN TÍCH CHUYÊN SÂU CHO MỘT CHI NHÁNH
 // =====================================================
 function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
-  if (!GROUPED || !GROUPED.byOwner || !DATA?.length)
+  if (!GROUPED?.byOwner || !DATA?.length)
     return `<p class="warn">⚠️ Không có dữ liệu cho ${orgName}.</p>`;
 
-  // --- Tổng hợp cơ bản ---
+  // === Tổng hợp cơ bản ===
   const totalLeads = DATA.length;
   const totalByTag = Object.entries(GROUPED.byTag)
     .map(([tag, arr]) => ({ tag, count: arr.length }))
     .sort((a, b) => b.count - a.count);
-
   const topTag = totalByTag[0];
   const tagPercent = (v) => ((v / totalLeads) * 100).toFixed(1);
 
-  // --- Trung bình lead/ngày ---
+  // === Trung bình lead/ngày ===
   const dates = Object.entries(GROUPED.byDate)
     .map(([d, obj]) => ({ d, total: obj.total }))
     .sort((a, b) => a.d.localeCompare(b.d));
-  const days = dates.length;
-  const avgPerDay = (totalLeads / (days || 1)).toFixed(1);
+  const days = dates.length || 1;
+  const avgPerDay = (totalLeads / days).toFixed(1);
   const trend =
     days > 2
       ? dates.at(-1).total > dates.at(-2).total
@@ -453,7 +452,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
         : "Lead giảm so với hôm qua."
       : "";
 
-  // --- Logo nhận diện chiến dịch ---
+  // === Logo chiến dịch ===
   const logos = [
     {
       match: /facebook|fb/i,
@@ -486,114 +485,156 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   ];
   const defaultLogo =
     "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
-
   const getLogo = (text = "") => {
     const t = text.toLowerCase();
     for (const l of logos) if (l.match.test(t)) return l.url;
     return defaultLogo;
   };
 
-  // --- Helper: Avatar từ tên ---
+  // === Helper: Avatar & màu ===
   const getInitials = (name = "") => {
     const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0][0]?.toUpperCase() || "?";
     return ((parts.at(-1)?.[0] || "") + (parts[0]?.[0] || "")).toUpperCase();
   };
-
-  // Tạo màu ổn định từ tên
   const getColorFromName = (name) => {
     let hash = 0;
-    for (let i = 0; i < name.length; i++) {
+    for (let i = 0; i < name.length; i++)
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = Math.abs(hash) % 360;
-    return `hsl(${hue}, 70%, 65%)`;
+    return `hsl(${Math.abs(hash) % 360},70%,65%)`;
   };
 
-  // --- Chiến dịch chi tiết ---
+  // === Chiến dịch ===
+  const goodTagRe = /Needed|Considering/i;
   const campaignStats = [];
   for (const [camp, sources] of Object.entries(GROUPED.byCampaign)) {
     for (const [src, mediums] of Object.entries(sources)) {
       for (const [medium, arr] of Object.entries(mediums)) {
+        let quality = 0;
+        for (const l of arr) if (goodTagRe.test(l.TagMain)) quality++;
         const total = arr.length;
-        const quality = arr.filter((l) =>
-          /Needed|Considering/i.test(l.TagMain)
-        ).length;
-        const qualityRate = total ? (quality / total) * 100 : 0;
         campaignStats.push({
           campaign: camp,
           source: src,
           medium,
           total,
           quality,
-          qualityRate,
+          qualityRate: (quality / total) * 100,
         });
       }
     }
   }
 
-  // 🏆 Top 1 theo số lượng
-  const topByVolume = [...campaignStats].sort((a, b) => b.total - a.total)[0];
-
-  // 💎 Top 3 theo chất lượng
-  const top3Quality = [...campaignStats]
+  const topByVolume = campaignStats.reduce((a, b) =>
+    b.total > a.total ? b : a
+  );
+  const top3Quality = campaignStats
     .filter((c) => c.total > 5)
     .sort((a, b) => b.qualityRate - a.qualityRate)
     .slice(0, 3);
 
-  // --- Phân tích Sale ---
+  // === Sale ===
   const saleStats = Object.entries(GROUPED.byOwner).map(([owner, data]) => {
-    const goodLeads = Object.values(data.tags)
+    const good = Object.values(data.tags)
       .flatMap((t) => t.leads)
-      .filter((l) => /Needed|Considering/i.test(l.TagMain));
-    const qualityRate = (goodLeads.length / data.total) * 100;
-    return { owner, total: data.total, quality: goodLeads.length, qualityRate };
+      .filter((l) => goodTagRe.test(l.TagMain)).length;
+    return {
+      owner,
+      total: data.total,
+      quality: good,
+      qualityRate: (good / data.total) * 100,
+    };
   });
 
-  const topSaleByVolume = [...saleStats].sort((a, b) => b.total - a.total)[0];
-  const topSaleByQuality = [...saleStats].sort(
-    (a, b) => b.qualityRate - a.qualityRate
-  )[0];
+  const topSaleByVolume = saleStats.reduce((a, b) =>
+    b.total > a.total ? b : a
+  );
+  const topSaleByQuality = saleStats.reduce((a, b) =>
+    b.qualityRate > a.qualityRate ? b : a
+  );
+  const lowSaleByQuality = saleStats.reduce((a, b) =>
+    b.qualityRate < a.qualityRate ? b : a
+  );
 
-  // --- Các tỷ lệ chất lượng tổng ---
-  const totalQuality = DATA.filter((l) =>
-    /Needed|Considering/i.test(l.TagMain)
+  // === Thống kê bổ sung ===
+  const junkCount = DATA.filter((l) =>
+    /junk|spam|test/i.test(l.TagMain)
   ).length;
+  const junkRate = ((junkCount / totalLeads) * 100).toFixed(1);
+  const saleGap = (
+    topSaleByQuality.qualityRate - lowSaleByQuality.qualityRate
+  ).toFixed(1);
+  const peakDay = dates.reduce((a, b) => (b.total > a.total ? b : a), {
+    d: "",
+    total: 0,
+  });
+  const avg = totalLeads / days;
+  const variance =
+    dates.reduce((sum, d) => sum + Math.pow(d.total - avg, 2), 0) / days;
+  const stability = 100 - Math.min(100, (Math.sqrt(variance) / avg) * 100);
+
+  // === Tổng thể ===
+  const totalQuality = DATA.filter((l) => goodTagRe.test(l.TagMain)).length;
   const qualityRateTotal = ((totalQuality / totalLeads) * 100).toFixed(1);
 
-  // --- Nhận định chuyên sâu ---
-  let insight = "";
-  if (qualityRateTotal > 60)
-    insight += `<strong>Tỷ lệ lead chất lượng cao (${qualityRateTotal}%)</strong> — dữ liệu đầu vào đang tốt.<br>`;
-  if (top3Quality[0]?.qualityRate > 65)
-    insight += `<strong>Chiến dịch hiệu quả nhất:</strong> ${
-      top3Quality[0].campaign
-    } / ${top3Quality[0].source} / ${
-      top3Quality[0].medium
-    } (${top3Quality[0].qualityRate.toFixed(1)}% Qualified).<br>`;
-  if (topSaleByQuality?.qualityRate > 55)
-    insight += `<strong>Sale ${
-      topSaleByQuality.owner
-    }</strong> có hiệu suất cao (${topSaleByQuality.qualityRate.toFixed(
-      1
-    )}%).<br>`;
-  if (qualityRateTotal < 40)
-    insight += `<strong>Tỷ lệ lead chất lượng thấp (${qualityRateTotal}%)</strong> → cần xem lại quy trình lọc lead.<br>`;
-  if (/junk/i.test(topTag.tag))
-    insight += `<strong>Tỷ lệ lead rác (${tagPercent(
-      topTag.count
-    )}%)</strong> cao, nên điều chỉnh target chiến dịch.<br>`;
-  if (!insight) insight = "Các chỉ số đang ổn định, chưa có vấn đề nổi bật.";
+  // === Insight dạng UL–LI ===
+  const insightItems = [];
 
-  // --- Render campaign item ---
-  const renderCampaignItem = (c, idx) => `
+  if (qualityRateTotal < 20)
+    insightItems.push(
+      `Tỷ lệ lead tổng thể thấp (${qualityRateTotal}%) — cần xem lại quy trình lọc lead và chiến dịch.`
+    );
+  else if (qualityRateTotal <= 45)
+    insightItems.push(
+      `Tỷ lệ lead trung bình (${qualityRateTotal}%) — có thể cải thiện thêm bằng tối ưu kênh quảng cáo.`
+    );
+  else
+    insightItems.push(
+      `Tỷ lệ lead chất lượng cao (${qualityRateTotal}%) — dữ liệu đầu vào đang tốt.`
+    );
+
+  if (junkRate > 15)
+    insightItems.push(
+      `Lead rác chiếm ${junkRate}% — cần điều chỉnh target chiến dịch.`
+    );
+
+  insightItems.push(
+    `Độ chênh lệch hiệu suất giữa <strong>${
+      topSaleByQuality.owner
+    } (${topSaleByQuality.qualityRate.toFixed(1)}%)</strong> và <strong>${
+      lowSaleByQuality.owner
+    } (${lowSaleByQuality.qualityRate.toFixed(
+      1
+    )}%)</strong> là <strong>${saleGap}%</strong> — cần training đồng đều hơn.`
+  );
+
+  insightItems.push(`Ngày cao điểm: ${peakDay.d} (${peakDay.total} leads).`);
+  insightItems.push(
+    `Chỉ số ổn định chiến dịch: ${stability.toFixed(
+      1
+    )}% (càng cao càng ổn định).`
+  );
+  insightItems.push(
+    `Chiến dịch hiệu quả nhất: ${top3Quality[0]?.campaign || "-"} (${
+      top3Quality[0]?.qualityRate?.toFixed(1) || 0
+    }% Qualified).`
+  );
+  insightItems.push(
+    `Sale nổi bật: ${
+      topSaleByQuality.owner
+    } (${topSaleByQuality.qualityRate.toFixed(1)}%).`
+  );
+
+  const insightHTML = insightItems.map((i) => `<li>${i}</li>`).join("");
+
+  // === Render ===
+  const renderCampaignItem = (c, i) => `
     <li>
       <div class="camp_item">
         <div class="camp_logo"><img src="${getLogo(
           c.campaign + c.source
         )}" alt=""></div>
         <div class="camp_info">
-          <p class="camp_name"><strong>${idx + 1}. ${c.campaign}</strong></p>
+          <p class="camp_name"><strong>${i + 1}. ${c.campaign}</strong></p>
           <p class="camp_source">${c.source} / ${c.medium}</p>
         </div>
         <div class="camp_stats">
@@ -603,29 +644,22 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
           )}% Qualified)</span>
         </div>
       </div>
-    </li>
-  `;
+    </li>`;
 
-  const qualityListHTML = top3Quality.map(renderCampaignItem).join("");
-
-  // --- Render avatar sale ---
-  const renderSaleItem = (sale, label) => {
-    const initials = getInitials(sale.owner);
-    const color = getColorFromName(sale.owner);
-    return `
-      <li>
-        <div class="sale_item">
-          <div class="sale_avatar" style="background:${color}">${initials}</div>
-          <div class="sale_info">
-            <p> <strong>${label}:</strong> ${sale.owner}</p>
-            <p class="sale_stats">${
-              sale.total
-            } leads – ${sale.qualityRate.toFixed(1)}% Qualified</p>
-          </div>
+  const renderSaleItem = (s, label) => `
+    <li>
+      <div class="sale_item">
+        <div class="sale_avatar" style="background:${getColorFromName(
+          s.owner
+        )}">${getInitials(s.owner)}</div>
+        <div class="sale_info">
+          <p><strong>${label}:</strong> ${s.owner}</p>
+          <p class="sale_stats">${s.total} leads – ${s.qualityRate.toFixed(
+    1
+  )}% Qualified</p>
         </div>
-      </li>
-    `;
-  };
+      </div>
+    </li>`;
 
   return `
   <section class="ai_section fade_in_block">
@@ -649,7 +683,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
             topByVolume.campaign + topByVolume.source
           )}" alt=""></div>
           <div class="camp_info">
-            <p class="camp_name"><strong>Top Volume:</strong> ${
+            <p class="camp_name"><strong>Top Lead:</strong> ${
               topByVolume.campaign
             }</p>
             <p class="camp_source">${topByVolume.source} / ${
@@ -665,7 +699,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
         </div>
       </li>
       <li><strong>Top 3 chiến dịch hiệu quả nhất (Qualified%)</strong></li>
-      ${qualityListHTML}
+      ${top3Quality.map(renderCampaignItem).join("")}
     </ul>
 
     <h5 class="fade_in_item delay-5"><i class="fa-solid fa-user-tie"></i> Đội ngũ Sale</h5>
@@ -678,14 +712,12 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
     <p class="fade_in_item delay-8">${trend}</p>
 
     <h5 class="fade_in_item delay-9"><i class="fa-solid fa-chart-simple"></i> Phân tích & Nhận định</h5>
-    <p class="fade_in_item delay-10">${insight}</p>
-  </section>
-`;
+    <ul class="fade_in_item delay-10 insight_list">${insightHTML}</ul>
+  </section>`;
 }
 
 async function processAndRenderAll(data) {
   if (!data?.length) return;
-
   GROUPED = processCRMData(data);
 
   // 🧠 Gọi hàm báo cáo chuyên sâu (IDEAS trước)
