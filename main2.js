@@ -579,49 +579,53 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   // === Insight dạng UL–LI ===
   const insightItems = [];
 
+  // 🎯 Tổng thể lead
   if (qualityRateTotal < 20)
-    insightItems.push(
-      `Tỷ lệ lead tổng thể thấp (${qualityRateTotal}%) — cần xem lại quy trình lọc lead và chiến dịch.`
-    );
+    insightItems.push(`Tỷ lệ lead tổng thể thấp (${qualityRateTotal}%) — cần xem lại quy trình lọc lead và chiến dịch.`);
   else if (qualityRateTotal <= 45)
-    insightItems.push(
-      `Tỷ lệ lead trung bình (${qualityRateTotal}%) — có thể cải thiện thêm bằng tối ưu kênh quảng cáo.`
-    );
+    insightItems.push(`Tỷ lệ lead trung bình (${qualityRateTotal}%) — có thể cải thiện thêm bằng tối ưu kênh quảng cáo.`);
   else
-    insightItems.push(
-      `Tỷ lệ lead chất lượng cao (${qualityRateTotal}%) — dữ liệu đầu vào đang tốt.`
-    );
+    insightItems.push(`Tỷ lệ lead chất lượng cao (${qualityRateTotal}%) — dữ liệu đầu vào đang tốt.`);
 
+  // 🧹 Lead rác
   if (junkRate > 15)
-    insightItems.push(
-      `Lead rác chiếm ${junkRate}% — cần điều chỉnh target chiến dịch.`
-    );
+    insightItems.push(`Lead rác chiếm ${junkRate}% — cần điều chỉnh target chiến dịch.`);
 
+  // ⚖️ So sánh Sale cao - thấp
   insightItems.push(
-    `Độ chênh lệch hiệu suất giữa <strong>${
-      topSaleByQuality.owner
-    } (${topSaleByQuality.qualityRate.toFixed(1)}%)</strong> và <strong>${
-      lowSaleByQuality.owner
-    } (${lowSaleByQuality.qualityRate.toFixed(
+    `Độ chênh lệch hiệu suất giữa <strong>${topSaleByQuality.owner} (${topSaleByQuality.qualityRate.toFixed(
+      1
+    )}%)</strong> và <strong>${lowSaleByQuality.owner} (${lowSaleByQuality.qualityRate.toFixed(
       1
     )}%)</strong> là <strong>${saleGap}%</strong> — cần training đồng đều hơn.`
   );
 
+  // 📈 Ngày cao điểm
   insightItems.push(`Ngày cao điểm: ${peakDay.d} (${peakDay.total} leads).`);
+
+  // 📊 Chỉ số ổn định (có đánh giá định tính)
+  let stabilityText = "ổn định tốt";
+  if (stability < 50) stabilityText = "chưa ổn định (dao động mạnh giữa các ngày)";
+  else if (stability < 80) stabilityText = "tương đối ổn định";
   insightItems.push(
-    `Chỉ số ổn định chiến dịch: ${stability.toFixed(
+    `Chỉ số ổn định chiến dịch: <strong>${stability.toFixed(1)}%</strong> — ${stabilityText}.`
+  );
+
+  // 🚀 Chiến dịch hiệu quả nhất
+  if (top3Quality[0]) {
+    const c = top3Quality[0];
+    insightItems.push(
+      `Chiến dịch hiệu quả nhất: <strong>${c.campaign}</strong> — <strong>${c.qualityRate.toFixed(
+        1
+      )}% Qualified</strong> (${c.quality}/${c.total} leads đủ chuẩn).`
+    );
+  }
+
+  // 💎 Sale nổi bật
+  insightItems.push(
+    `Sale nổi bật: <strong>${topSaleByQuality.owner}</strong> (${topSaleByQuality.qualityRate.toFixed(
       1
-    )}% (càng cao càng ổn định).`
-  );
-  insightItems.push(
-    `Chiến dịch hiệu quả nhất: ${top3Quality[0]?.campaign || "-"} (${
-      top3Quality[0]?.qualityRate?.toFixed(1) || 0
-    }% Qualified).`
-  );
-  insightItems.push(
-    `Sale nổi bật: ${
-      topSaleByQuality.owner
-    } (${topSaleByQuality.qualityRate.toFixed(1)}%).`
+    )}%).`
   );
 
   const insightHTML = insightItems.map((i) => `<li>${i}</li>`).join("");
