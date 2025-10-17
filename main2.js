@@ -354,7 +354,6 @@ async function main() {
 
   // 🧠 Xử lý & render
   await processAndRenderAll(RAW_DATA);
-
   // ⚙️ Khởi tạo UI control
   setupTimeDropdown();
   setupAccountFilter();
@@ -371,24 +370,335 @@ async function main() {
 }
 
 main();
+function generateAdvancedReport(RAW_DATA) {
+  if (!GROUPED || !Array.isArray(RAW_DATA)) {
+    console.warn("generateAdvancedReport: Dữ liệu đầu vào không hợp lệ.");
+    return;
+  }
+
+  // 🧩 Gom grouped theo chi nhánh
+  const buildGroupedForOrg = (orgKeyword) => {
+    const orgData = RAW_DATA.filter(
+      (l) => (l.CustomField16Text || "").trim().toUpperCase() === orgKeyword
+    );
+    return { data: orgData, grouped: processCRMData(orgData) };
+  };
+
+  const ideas = buildGroupedForOrg("IDEAS");
+  const vtci = buildGroupedForOrg("VTCI");
+
+  // 🧠 Tạo báo cáo riêng từng bên
+  const ideasReport = makeDeepReport(ideas.grouped, ideas.data, "IDEAS");
+  const vtciReport = makeDeepReport(vtci.grouped, vtci.data, "VTCI");
+
+  // 🗓️ Lấy ngày hiển thị
+  const dateText =
+    document.querySelector(".dom_date")?.textContent?.trim() || "";
+
+  // 🧱 Render HTML vào khu vực báo cáo
+  const reportWrap = document.querySelector(".dom_ai_report");
+  if (!reportWrap)
+    return console.warn("Không tìm thấy .dom_ai_report trong DOM.");
+
+  // Cập nhật tiêu đề ngày
+  const title = reportWrap.querySelector("h3");
+  if (title) {
+    title.innerHTML = `<i class="fa-solid fa-chart-pie"></i> BÁO CÁO TỔNG THỂ DATA - ${dateText}`;
+  }
+
+  // Render nội dung báo cáo
+  const content = reportWrap.querySelector(".dom_ai_report_content");
+  if (content) {
+    content.innerHTML = `
+      <div class="ai_report_block ideas">
+        <h4> <img src="https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp"/>IDEAS - CRM Data</h4>
+        <div class="ai_report_inner">${ideasReport}</div>
+      </div>
+      <div class="ai_report_block vtci">
+        <h4> <img src="https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp"/>VTCI - CRM Data</h4>
+        <div class="ai_report_inner">${vtciReport}</div>
+      </div>
+    `;
+  }
+
+  console.log("✅ Đã render báo cáo AI cho IDEAS & VTCI.");
+}
+
+// =====================================================
+// 🧠 HÀM PHÂN TÍCH CHUYÊN SÂU CHO MỘT CHI NHÁNH
+// =====================================================
+function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
+  if (!GROUPED || !GROUPED.byOwner || !DATA?.length)
+    return `<p class="warn">⚠️ Không có dữ liệu cho ${orgName}.</p>`;
+
+  // --- Tổng hợp cơ bản ---
+  const totalLeads = DATA.length;
+  const totalByTag = Object.entries(GROUPED.byTag)
+    .map(([tag, arr]) => ({ tag, count: arr.length }))
+    .sort((a, b) => b.count - a.count);
+
+  const topTag = totalByTag[0];
+  const tagPercent = (v) => ((v / totalLeads) * 100).toFixed(1);
+
+  // --- Trung bình lead/ngày ---
+  const dates = Object.entries(GROUPED.byDate)
+    .map(([d, obj]) => ({ d, total: obj.total }))
+    .sort((a, b) => a.d.localeCompare(b.d));
+  const days = dates.length;
+  const avgPerDay = (totalLeads / (days || 1)).toFixed(1);
+  const trend =
+    days > 2
+      ? dates.at(-1).total > dates.at(-2).total
+        ? "Lead đang tăng so với hôm qua."
+        : "Lead giảm so với hôm qua."
+      : "";
+
+  // --- Logo nhận diện chiến dịch ---
+  const logos = [
+    {
+      match: /facebook|fb/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
+    },
+    {
+      match: /google/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
+    },
+    {
+      match: /tiktok/i,
+      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
+    },
+    {
+      match: /linkedin/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
+    },
+    {
+      match: /zalo/i,
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
+    },
+    {
+      match: /Other - Web VTCI/i,
+      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
+    },
+    {
+      match: /Other - Web IDEAS/i,
+      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
+    },
+  ];
+  const defaultLogo =
+    "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
+
+  const getLogo = (text = "") => {
+    const t = text.toLowerCase();
+    for (const l of logos) if (l.match.test(t)) return l.url;
+    return defaultLogo;
+  };
+
+  // --- Helper: Avatar từ tên ---
+  const getInitials = (name = "") => {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() || "?";
+    return ((parts.at(-1)?.[0] || "") + (parts[0]?.[0] || "")).toUpperCase();
+  };
+
+  // Tạo màu ổn định từ tên
+  const getColorFromName = (name) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 70%, 65%)`;
+  };
+
+  // --- Chiến dịch chi tiết ---
+  const campaignStats = [];
+  for (const [camp, sources] of Object.entries(GROUPED.byCampaign)) {
+    for (const [src, mediums] of Object.entries(sources)) {
+      for (const [medium, arr] of Object.entries(mediums)) {
+        const total = arr.length;
+        const quality = arr.filter((l) =>
+          /Needed|Considering/i.test(l.TagMain)
+        ).length;
+        const qualityRate = total ? (quality / total) * 100 : 0;
+        campaignStats.push({
+          campaign: camp,
+          source: src,
+          medium,
+          total,
+          quality,
+          qualityRate,
+        });
+      }
+    }
+  }
+
+  // 🏆 Top 1 theo số lượng
+  const topByVolume = [...campaignStats].sort((a, b) => b.total - a.total)[0];
+
+  // 💎 Top 3 theo chất lượng
+  const top3Quality = [...campaignStats]
+    .filter((c) => c.total > 5)
+    .sort((a, b) => b.qualityRate - a.qualityRate)
+    .slice(0, 3);
+
+  // --- Phân tích Sale ---
+  const saleStats = Object.entries(GROUPED.byOwner).map(([owner, data]) => {
+    const goodLeads = Object.values(data.tags)
+      .flatMap((t) => t.leads)
+      .filter((l) => /Needed|Considering/i.test(l.TagMain));
+    const qualityRate = (goodLeads.length / data.total) * 100;
+    return { owner, total: data.total, quality: goodLeads.length, qualityRate };
+  });
+
+  const topSaleByVolume = [...saleStats].sort((a, b) => b.total - a.total)[0];
+  const topSaleByQuality = [...saleStats].sort(
+    (a, b) => b.qualityRate - a.qualityRate
+  )[0];
+
+  // --- Các tỷ lệ chất lượng tổng ---
+  const totalQuality = DATA.filter((l) =>
+    /Needed|Considering/i.test(l.TagMain)
+  ).length;
+  const qualityRateTotal = ((totalQuality / totalLeads) * 100).toFixed(1);
+
+  // --- Nhận định chuyên sâu ---
+  let insight = "";
+  if (qualityRateTotal > 60)
+    insight += `<strong>Tỷ lệ lead chất lượng cao (${qualityRateTotal}%)</strong> — dữ liệu đầu vào đang tốt.<br>`;
+  if (top3Quality[0]?.qualityRate > 65)
+    insight += `<strong>Chiến dịch hiệu quả nhất:</strong> ${
+      top3Quality[0].campaign
+    } / ${top3Quality[0].source} / ${
+      top3Quality[0].medium
+    } (${top3Quality[0].qualityRate.toFixed(1)}% Qualified).<br>`;
+  if (topSaleByQuality?.qualityRate > 55)
+    insight += `<strong>Sale ${
+      topSaleByQuality.owner
+    }</strong> có hiệu suất cao (${topSaleByQuality.qualityRate.toFixed(
+      1
+    )}%).<br>`;
+  if (qualityRateTotal < 40)
+    insight += `<strong>Tỷ lệ lead chất lượng thấp (${qualityRateTotal}%)</strong> → cần xem lại quy trình lọc lead.<br>`;
+  if (/junk/i.test(topTag.tag))
+    insight += `<strong>Tỷ lệ lead rác (${tagPercent(
+      topTag.count
+    )}%)</strong> cao, nên điều chỉnh target chiến dịch.<br>`;
+  if (!insight) insight = "Các chỉ số đang ổn định, chưa có vấn đề nổi bật.";
+
+  // --- Render campaign item ---
+  const renderCampaignItem = (c, idx) => `
+    <li>
+      <div class="camp_item">
+        <div class="camp_logo"><img src="${getLogo(
+          c.campaign + c.source
+        )}" alt=""></div>
+        <div class="camp_info">
+          <p class="camp_name"><strong>${idx + 1}. ${c.campaign}</strong></p>
+          <p class="camp_source">${c.source} / ${c.medium}</p>
+        </div>
+        <div class="camp_stats">
+          <span class="camp_total">${c.total}</span> leads
+          <span class="camp_quality">(${c.qualityRate.toFixed(
+            1
+          )}% Qualified)</span>
+        </div>
+      </div>
+    </li>
+  `;
+
+  const qualityListHTML = top3Quality.map(renderCampaignItem).join("");
+
+  // --- Render avatar sale ---
+  const renderSaleItem = (sale, label) => {
+    const initials = getInitials(sale.owner);
+    const color = getColorFromName(sale.owner);
+    return `
+      <li>
+        <div class="sale_item">
+          <div class="sale_avatar" style="background:${color}">${initials}</div>
+          <div class="sale_info">
+            <p> <strong>${label}:</strong> ${sale.owner}</p>
+            <p class="sale_stats">${
+              sale.total
+            } leads – ${sale.qualityRate.toFixed(1)}% Qualified</p>
+          </div>
+        </div>
+      </li>
+    `;
+  };
+
+  return `
+  <section class="ai_section fade_in_block">
+    <h5 class="fade_in_item delay-1"><i class="fa-solid fa-users"></i> Lead</h5>
+    <ul class="fade_in_item delay-2">
+      <li><strong><i class="fa-solid fa-caret-right"></i> Tổng số lead:</strong> ${totalLeads.toLocaleString(
+        "vi-VN"
+      )}</li>
+      <li><strong><i class="fa-solid fa-caret-right"></i> Trung bình mỗi ngày:</strong> ${avgPerDay} leads/ngày</li>
+      <li><strong><i class="fa-solid fa-caret-right"></i> Tỷ lệ lead chất lượng:</strong> ${qualityRateTotal}%</li>
+      <li><strong><i class="fa-solid fa-caret-right"></i> Tag phổ biến nhất:</strong> ${
+        topTag.tag
+      } (${tagPercent(topTag.count)}%)</li>
+    </ul>
+
+    <h5 class="fade_in_item delay-3"><i class="fa-solid fa-bullhorn"></i> Hiệu quả chiến dịch</h5>
+    <ul class="ai_campaign_list fade_in_item delay-4">
+      <li class="camp_top_volume">
+        <div class="camp_item top">
+          <div class="camp_logo"><img src="${getLogo(
+            topByVolume.campaign + topByVolume.source
+          )}" alt=""></div>
+          <div class="camp_info">
+            <p class="camp_name"><strong>Top Volume:</strong> ${
+              topByVolume.campaign
+            }</p>
+            <p class="camp_source">${topByVolume.source} / ${
+    topByVolume.medium
+  }</p>
+          </div>
+          <div class="camp_stats">
+            <span class="camp_total">${topByVolume.total}</span> leads
+            <span class="camp_quality">(${topByVolume.qualityRate.toFixed(
+              1
+            )}% Qualified)</span>
+          </div>
+        </div>
+      </li>
+      <li><strong>Top 3 chiến dịch hiệu quả nhất (Qualified%)</strong></li>
+      ${qualityListHTML}
+    </ul>
+
+    <h5 class="fade_in_item delay-5"><i class="fa-solid fa-user-tie"></i> Đội ngũ Sale</h5>
+    <ul class="ai_sale_list fade_in_item delay-6">
+      ${renderSaleItem(topSaleByVolume, "Nhiều lead nhất")}
+      ${renderSaleItem(topSaleByQuality, "Chất lượng cao nhất")}
+    </ul>
+
+    <h5 class="fade_in_item delay-7"><i class="fa-solid fa-chart-line"></i> Xu hướng</h5>
+    <p class="fade_in_item delay-8">${trend}</p>
+
+    <h5 class="fade_in_item delay-9"><i class="fa-solid fa-chart-simple"></i> Phân tích & Nhận định</h5>
+    <p class="fade_in_item delay-10">${insight}</p>
+  </section>
+`;
+}
+
 async function processAndRenderAll(data) {
-  if (!data?.length) return console.warn("Không có dữ liệu hợp lệ để xử lý");
+  if (!data?.length) return;
 
-  console.time("processCRMData");
   GROUPED = processCRMData(data);
-  console.timeEnd("processCRMData");
-  window.grouped = GROUPED;
 
-  // 🧩 Render chart mượt mà & ưu tiên theo độ quan trọng
+  // 🧠 Gọi hàm báo cáo chuyên sâu (IDEAS trước)
+
+  // Tiếp tục phần render chart/table như cũ
   queueMicrotask(() => renderChartsSmoothly(GROUPED, data));
-
-  // 🧱 Render bảng và filter cuối để không chặn main thread
   requestAnimationFrame(() => {
     renderLeadTable(data);
     renderFilterOptions(data);
     renderSaleFilter(GROUPED);
   });
 }
+
 // 🧠 Hàm render chart chia nhỏ batch – không chặn main thread
 function renderChartsSmoothly(GROUPED, data) {
   const chartTasks = [
@@ -1897,22 +2207,64 @@ function renderToplist(grouped, mode = "default") {
 // ⚙️ Nút toggle chế độ lọc
 // ======================
 document.addEventListener("click", (e) => {
-  // Gộp 2 trường hợp: nút close và overlay
+  // --- 1️⃣ Đóng sale detail ---
   const backBtn =
     e.target.closest(".sale_report .sale_report_close") ||
     e.target.closest(".dom_overlay");
+  if (backBtn) {
+    const dashboard = document.querySelector(".dom_dashboard");
+    if (dashboard) {
+      console.log("remove");
+      dashboard.classList.remove("sale_detail_ads", "sale_detail");
+      if (ORIGINAL_DATA) processAndRenderAll(ORIGINAL_DATA);
+    }
+    return; // ngăn xử lý tiếp
+  }
 
-  if (!backBtn) return;
+  // --- 2️⃣ Mở AI Report ---
+  const aiBtn = e.target.closest(".ai_report");
+  if (aiBtn) {
+    const panel = document.querySelector(".dom_ai_report");
+    if (!panel) return;
 
-  const dashboard = document.querySelector(".dom_dashboard");
-  if (!dashboard) return;
+    // Gọi báo cáo
+    generateAdvancedReport(CRM_DATA);
 
-  console.log("remove");
+    // Kích hoạt panel
+    panel.classList.add("active");
 
-  dashboard.classList.remove("sale_detail_ads");
-  dashboard.classList.remove("sale_detail");
+    // Scroll panel lên đầu
+    panel.scrollTop = 0;
+    // Hoặc nếu muốn cuộn cả body theo panel: panel.scrollIntoView({ behavior: "smooth" });
 
-  if (ORIGINAL_DATA) processAndRenderAll(ORIGINAL_DATA);
+    // Sau 3s (giả lập load + chờ), cho từng item fade-in
+    setTimeout(() => {
+      const items = panel.querySelectorAll(".fade_in_item");
+      items.forEach((el, i) => {
+        setTimeout(() => el.classList.add("show"), i * 300); // 0.3s mỗi item
+      });
+    }, 3000);
+
+    return; // chặn event tiếp
+  }
+
+  // --- 3️⃣ Đóng AI Report ---
+  const closeBtn = e.target.closest(".dom_ai_report_close");
+  if (closeBtn) {
+    const reportPanel = document.querySelector(".dom_ai_report");
+    if (reportPanel) {
+      reportPanel.classList.add("closing");
+
+      // ⏳ Đợi animation xong rồi xóa class
+      reportPanel.addEventListener(
+        "animationend",
+        () => {
+          reportPanel.classList.remove("active", "closing");
+        },
+        { once: true }
+      );
+    }
+  }
 });
 
 document.addEventListener("DOMContentLoaded", () => {
