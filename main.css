@@ -296,6 +296,7 @@ html {
 }
 .dom_toplist > li:hover {
   border: 1px solid #ffa900;
+  box-shadow: 0 0 3px #ffaa0081;
 }
 .toplist_more_ads,
 .toplist_more {
@@ -704,26 +705,27 @@ tbody {
   color: var(--mainClr);
 }
 .dom_select_show {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  top: calc(100% + 1rem);
-  left: 0;
-  background: #fff;
-  border-radius: 15px;
-  width: 100%;
-  display: flex;
+    position: absolute;
+    top: calc(100% + 1rem);
+    left: 0;
+    width: 100%;
+    background: #fff;
+    border-radius: 15px;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+    overflow: auto;
+    max-height: 35vh;
 
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
-  border-radius: 15px;
-  transition: all 0.3s ease-in-out;
-  pointer-events: none;
-  z-index: 9;
-  opacity: 0;
-  max-height: 35vh;
-  overflow: auto;
+    display: flex;
+    flex-direction: column;
+    z-index: 9;
+
+    opacity: 0;
+    transform: translateY(-10px); /* 🚀 nằm hơi cao khi ẩn */
+    pointer-events: none;
+
+    transition: all 0.4s ease;
 }
+
 .time .dom_select_show {
   max-height: 60vh !important;
   overflow: unset !important;
@@ -742,8 +744,9 @@ tbody {
   width: 100%;
 }
 .dom_select_show.active {
-  opacity: 1;
-  pointer-events: all;
+    opacity: 1;
+    transform: translateY(0); /* 🎯 trượt xuống vị trí thật */
+    pointer-events: all;
 }
 .radio_box::after {
   content: "";
@@ -1139,10 +1142,10 @@ tbody {
 }
 
 .freq_tag_item .tag_count {
-  background-color: #fff1d4;
+   background-color: var(--tag-color);
   padding: 0.1rem 1rem;
   margin-left: 1rem;
-  color: var(--textClr);
+  color:white;
   font-weight: bold;
   font-size: 1.2rem;
   border-radius: 50rem;
@@ -1412,6 +1415,7 @@ tbody {
   height: 100vh;
   /* Thêm hiệu ứng */
   animation: slideInRight 0.35s ease;
+  overflow-x: hidden;
 }
 .dom_ai_report {
   opacity: 0;
@@ -1711,6 +1715,11 @@ tbody {
 
  
 }
+#access_token {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--mainClr);
+}
 .report_time {
   font-size: 1.6rem;
   display: block;
@@ -1781,6 +1790,9 @@ tbody {
   opacity: 1;
   pointer-events: all;
 }
+.sale_detail_ads .saleperson_detail .dom_selected {
+  font-size: 1.8rem;
+}
 .sale_detail_ads ~ .dom_overlay {
   opacity: 1;
   pointer-events: all;
@@ -1791,8 +1803,8 @@ tbody {
 }
 .sale_detail_ads .saleperson_detail {
   pointer-events: none;
-  box-shadow: unset;
-  opacity: 0.8;
+  min-width: unset;
+  width: max-content;
 }
 .sale_detail_ads .saleperson_detail i {
   display: none;
