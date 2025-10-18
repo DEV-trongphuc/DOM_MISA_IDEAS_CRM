@@ -6,6 +6,8 @@
 // 📥 Lấy dữ liệu giả lập từ local file
 // ----------------------------------------
 let CRM_DATA = [];
+let VIEW_DATA = []
+let VIEW_DEGREE = []
 function waitForOTP() {
   return new Promise((resolve, reject) => {
     const container = document.querySelector(".dom_accounts");
@@ -17,7 +19,6 @@ function waitForOTP() {
       return reject("Không tìm thấy các thành phần UI OTP");
     }
 
-    // Hiện UI
     container.classList.add("active");
     overlay.classList.add("active");
 
@@ -27,7 +28,6 @@ function waitForOTP() {
         alert("Vui lòng nhập OTP!");
         return;
       }
-      // Ẩn UI sau khi confirm
       container.classList.remove("active");
       overlay.classList.remove("active");
       confirmBtn.removeEventListener("click", handler);
@@ -39,7 +39,7 @@ function waitForOTP() {
 }
 
 async function loginFlow(username, password) {
-  // ==== STEP 1: Login để lấy temp token hoặc EmployeeCode ====
+  // STEP 1: login để lấy temp token
   const formData1 = new FormData();
   formData1.append("Username", username);
   formData1.append("Password", password);
@@ -51,22 +51,18 @@ async function loginFlow(username, password) {
   const data1 = await res1.json();
   console.log("Step 1 response:", data1);
 
-  // ✅ Nếu không có token mà có EmployeeCode → nhảy thẳng qua Step 3
+  // Nếu không có temp token mà có EmployeeCode => bỏ qua OTP
   if (!data1.Data?.AccessToken?.Token) {
     if (data1.Data?.User?.EmployeeCode) {
       console.log("Không có temp token, nhưng có EmployeeCode → qua Step 3");
       return await doStep3();
     }
-    console.error("Không nhận được temp token và không có EmployeeCode!");
-    return;
+    throw new Error("Không nhận được temp token và không có EmployeeCode!");
   }
 
-  // ✅ Có temp token → tiếp tục Step 2 (nhập OTP)
+  // STEP 2: nhập OTP
   const tempToken = data1.Data.AccessToken.Token;
-  console.log("Temp Token:", tempToken);
-
-  // ==== STEP 2: Yêu cầu người dùng nhập OTP ====
-  const otp = await waitForOTP(); // Hàm này hiển thị input hoặc popup nhập OTP
+  const otp = await waitForOTP();
 
   const formData2 = new FormData();
   formData2.append("OTP", otp);
@@ -79,32 +75,23 @@ async function loginFlow(username, password) {
   const data2 = await res2.json();
   console.log("Step 2 response:", data2);
 
-  if (!data2.Success) {
-    console.error("Login thất bại:", data2.UserMessage || data2.SystemMessage);
-    return;
-  }
+  if (!data2.Success) throw new Error(data2.UserMessage || "Login thất bại!");
 
-  console.log("Access Token chính thức:", data2.Data.AccessToken?.Token);
-
-  // ==== STEP 3: Lấy token CRM chính ====
+  // STEP 3: Lấy token CRM chính
   return await doStep3();
 }
-
 // 🔹 Hàm Step 3 tách riêng để tái sử dụng
 async function doStep3() {
   const res3 = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
     method: "POST",
   });
   const data3 = await res3.json();
-  console.log("Step 3 response (User Info):", data3);
+  console.log("Step 3 response:", data3);
 
   const token = data3.Data?.token;
   const refresh_token = data3.Data?.refresh_token;
 
-  if (!token) {
-    console.error("Không lấy được token chính thức ở Step 3!");
-    return null;
-  }
+  if (!token) throw new Error("Không lấy được token CRM!");
 
   localStorage.setItem("misa_token", token);
   localStorage.setItem("misa_refresh_token", refresh_token);
@@ -115,184 +102,163 @@ async function doStep3() {
 async function quickLogin() {
   const response = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    // Nếu cần gửi body, có thể thêm ở đây:
-    // body: JSON.stringify({ username: "xxx", password: "xxx" })
+    headers: { "Content-Type": "application/json" },
   });
-
   const data = await response.json();
-  console.log("Step 3 response (User Info):", data);
-
-  // Lấy token và refresh_token
   const token = data?.Data?.token;
-  console.log("token", token);
 
   if (token) {
-    // ✅ Lưu vào localStorage
     localStorage.setItem("misa_token", token);
-    console.log("✅ Token và Refresh Token đã được lưu vào localStorage");
-  } else {
-    console.warn("⚠️ Không tìm thấy token trong phản hồi:", data);
+    console.log("✅ Token quickLogin đã được lưu");
+    return token;
   }
 
-  return token;
+  console.warn("⚠️ Không tìm thấy token trong quickLogin:", data);
+  return null;
 }
+
 async function getToken(username, password, forceLogin = false) {
-  // ⚙️ Nếu chưa có hoặc buộc loginFlow thì bỏ qua localStorage
   if (!forceLogin) {
     let token = localStorage.getItem("misa_token");
     if (token) return token;
 
-    // ⚡ Thử quickLogin trước
-    const qData = await quickLogin();
-    if (qData?.length) return qData;
-    console.log("OHNO");
+    const quick = await quickLogin();
+    if (quick) return quick;
   }
 
-  // 🔑 Thực hiện loginFlow khi bắt buộc hoặc quickLogin thất bại
-  try {
-    const lData = await loginFlow(username, password);
-    if (lData?.token) {
-      localStorage.setItem("misa_token", lData.token);
-      return lData.token;
+  const fullLogin = await loginFlow(username, password);
+  if (fullLogin?.token) return fullLogin.token;
+
+  const manual = prompt("Nhập token MISA:");
+  if (!manual) throw new Error("Không có token MISA");
+  localStorage.setItem("misa_token", manual);
+  return manual;
+}
+// ========================= FETCH LEAD DATA (no delay) =========================
+async function fetchLeadData(from, to, token) {
+  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
+  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+
+      if (res.status === 401 || res.status === 403) {
+        // Token chưa hợp lệ hoặc hết hạn
+        console.warn(`❌ Token bị từ chối (${res.status}) ở lần ${attempt}`);
+        localStorage.removeItem("misa_token");
+        return [];
+      }
+
+      if (!res.ok) {
+        console.warn(`⚠️ Lỗi HTTP ${res.status}, thử lại (${attempt}/3)`);
+        continue; // Thử lại nếu lỗi tạm thời
+      }
+
+      const json = await res.json();
+
+      // Có data thì trả về luôn
+      if (json?.data?.length) {
+        console.log(`📦 Nhận ${json.data.length} leads (attempt ${attempt})`);
+        return json.data;
+      }
+
+      // Không có data nhưng không lỗi → có thể backend chưa sync kịp
+      console.log(`ℹ️ Attempt ${attempt}: data rỗng, thử lại ngay...`);
+      continue;
+
+    } catch (err) {
+      console.error(`⚠️ Lỗi network attempt ${attempt}:`, err);
+      continue;
     }
-    throw new Error("LoginFlow không trả token");
-  } catch (err) {
-    console.error("LoginFlow thất bại:", err);
   }
 
-  // 🧩 Nếu vẫn không có token → nhập tay
-  const token = prompt("Nhập token MISA:");
-  if (!token) throw new Error("Người dùng không nhập token");
-  localStorage.setItem("misa_token", token);
-  return token;
+  console.error("❌ Hết 3 lượt gọi mà không có dữ liệu hợp lệ");
+  return [];
+}
+async function fetchLeads(from, to) {
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
+
+  let data = null;
+  let token = null;
+
+  try {
+    // 1️⃣ Lấy token (ưu tiên localStorage hoặc quickLogin)
+    token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+    console.log("🔑 Token hiện tại:", token.slice(0, 20) + "...");
+
+    // 2️⃣ Gọi API chính
+    data = await fetchLeadData(from, to, token);
+
+    // 3️⃣ Nếu token cũ lỗi hoặc API báo unauthorized → tự login lại
+    if (!data?.length) {
+      console.warn("⚠️ Token có thể hết hạn → login lại bằng forceLogin...");
+
+      localStorage.removeItem("misa_token");
+      token = await getToken("numt@ideas.edu.vn", "Ideas123456", true);
+      data = await fetchLeadData(from, to, token);
+    }
+
+    // 4️⃣ Nếu vẫn không có dữ liệu → cảnh báo người dùng
+    if (!data?.length) {
+      console.error("❌ Không có dữ liệu sau khi login lại!");
+      alert("IDEAS CRM không có phản hồi hoặc token bị lỗi!");
+    } else {
+      console.log(`✅ Đã tải ${data.length} leads`);
+      CRM_DATA = data;
+    }
+  } catch (err) {
+    console.error("🚨 Lỗi fetchLeads:", err);
+    alert("Không thể kết nối đến IDEAS CRM!");
+  } finally {
+    loading.classList.remove("active");
+  }
+
+  return data || [];
 }
 // async function fetchLeads(from, to) {
 //   const loading = document.querySelector(".loading");
 //   loading.classList.add("active");
 
 //   let data = null;
-//   let usedQuickLogin = false;
+//   let token = "Test";
 
 //   try {
-//     let token = "";
-//     // let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
-//     usedQuickLogin = token;
+//     // 1️⃣ Lấy token (ưu tiên localStorage hoặc quickLogin)
+//     // token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+//     // console.log("🔑 Token hiện tại:", token.slice(0, 20) + "...");
 
-//     // const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-//     const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
-//     let res = await fetch(url, { cache: "no-store" });
-//     let json = await res.json();
+//     // 2️⃣ Gọi API chính
+//     data = await fetchLeadData(from, to, token);
 
-//     // 🟢 Nếu có data thì xong
-//     if (json?.data?.length) {
-//       data = json.data;
-//       CRM_DATA = data;
-//     } else {
-//       console.warn("Token có thể lỗi, thử loginFlow lại...");
+//     // 3️⃣ Nếu token cũ lỗi hoặc API báo unauthorized → tự login lại
+//     if (!data?.length) {
+//       console.warn("⚠️ Token có thể hết hạn → login lại bằng forceLogin...");
+
 //       localStorage.removeItem("misa_token");
+//       token = await getToken("numt@ideas.edu.vn", "Ideas123456", true);
+//       data = await fetchLeadData(from, to, token);
+//     }
 
-//       // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
-//       if (usedQuickLogin) {
-//         console.log("vô");
-
-//         const newToken = await getToken(
-//           "numt@ideas.edu.vn",
-//           "Ideas123456",
-//           true
-//         );
-//         const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
-//         res = await fetch(retryUrl, { cache: "no-store" });
-//         json = await res.json();
-
-//         if (json?.data?.length) {
-//           data = json.data;
-//           CRM_DATA = data;
-//         }
-//       }
+//     // 4️⃣ Nếu vẫn không có dữ liệu → cảnh báo người dùng
+//     if (!data?.length) {
+//       console.error("❌ Không có dữ liệu sau khi login lại!");
+//       alert("IDEAS CRM không có phản hồi hoặc token bị lỗi!");
+//     } else {
+//       console.log(`✅ Đã tải ${data.length} leads`);
+//       CRM_DATA = data;
 //     }
 //   } catch (err) {
-//     console.error("❌ Lỗi fetchLeads:", err);
-//     alert("Không thể kết nối IDEAS.EDU.VN");
-//     localStorage.removeItem("misa_token");
+//     console.error("🚨 Lỗi fetchLeads:", err);
+//     alert("Không thể kết nối đến IDEAS CRM!");
+//   } finally {
+//     loading.classList.remove("active");
 //   }
 
-//   // ⚠️ Nếu vẫn không có dữ liệu
-//   // if (!data) {
-//   //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
-//   // }
-
-//   loading.classList.remove("active");
 //   return data || [];
 // }
 
-async function fetchLeads(from, to) {
-  const loading = document.querySelector(".loading");
-  loading.classList.add("active");
-
-  let data = null;
-  let usedQuickLogin = false;
-
-  try {
-    // ✅ 1. Gọi token bình thường (ưu tiên localStorage hoặc quickLogin)
-    let token = await getToken("numt@ideas.edu.vn", "Ideas123456");
-    usedQuickLogin = token;
-
-    const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-    let res = await fetch(url, { cache: "no-store" });
-    let json = await res.json();
-
-    // 🟢 Nếu có data thì xong
-    if (json?.data?.length) {
-      data = json.data;
-      CRM_DATA = data;
-    } else {
-      console.warn("Token có thể lỗi, thử loginFlow lại...");
-      localStorage.removeItem("misa_token");
-
-      // 🔁 2. Nếu token đến từ quickLogin thì gọi lại bằng loginFlow
-      if (usedQuickLogin) {
-        console.log("vô");
-
-        const newToken = await getToken(
-          "numt@ideas.edu.vn",
-          "Ideas123456",
-          true
-        );
-        const retryUrl = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${newToken}`;
-        res = await fetch(retryUrl, { cache: "no-store" });
-        json = await res.json();
-
-        if (json?.data?.length) {
-          data = json.data;
-          CRM_DATA = data;
-        }
-      }
-    }
-  } catch (err) {
-    console.error("❌ Lỗi fetchLeads:", err);
-    alert("Không thể kết nối IDEAS.EDU.VN");
-    localStorage.removeItem("misa_token");
-  }
-
-  // ⚠️ Nếu vẫn không có dữ liệu
-  // if (!data) {
-  //   alert("⚠️ IDEAS CRM không có phản hồi hoặc token MISA bị lỗi!");
-  // }
-
-  loading.classList.remove("active");
-  return data || [];
-}
-
-// const initRange = getDateRange("this_month");
-
-// fetchLeads(initRange.from, initRange.to, "numt@ideas.edu.vn", "Ideas123456");
-
-// ----------------------------------------
-// 🧠 Hàm xử lý tag
-// ----------------------------------------
 function getTagsArray(tagText) {
   if (!tagText) return [];
   return tagText
@@ -339,29 +305,24 @@ const currentFilter = { campaign: null, source: null, medium: null };
 async function main() {
   performance.mark("start_main");
 
-  // 🗓 Lấy khoảng ngày mặc định
   const initRange = getDateRange("this_week");
   const dateText = document.querySelector(".dom_date");
   dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
 
-  // ⏳ Hiển thị loading sớm
   document.querySelector(".loading")?.classList.add("active");
 
-  // 📥 Fetch dữ liệu
   const t0 = performance.now();
   RAW_DATA = await fetchLeads(initRange.from, initRange.to);
   console.log(`✅ FetchLeads done in ${(performance.now() - t0).toFixed(1)}ms`);
 
-  // 🧠 Xử lý & render
   await processAndRenderAll(RAW_DATA);
-  // ⚙️ Khởi tạo UI control
   setupTimeDropdown();
   setupAccountFilter();
   setupClearFilter();
   setupQualityFilter();
   setupLeadSearch();
   setupDropdowns();
-
+setupSaleAIReportButton();
   performance.mark("end_main");
   console.log(
     "⏱ Total main():",
@@ -369,7 +330,11 @@ async function main() {
   );
 }
 
-main();
+// ✅ Gọi init để đảm bảo token xong mới chạy main
+(async () => {
+  await main();
+})();
+
 function generateAdvancedReport(RAW_DATA) {
   if (!GROUPED || !Array.isArray(RAW_DATA)) {
     console.warn("generateAdvancedReport: Dữ liệu đầu vào không hợp lệ.");
@@ -402,9 +367,13 @@ function generateAdvancedReport(RAW_DATA) {
 
   // Cập nhật tiêu đề ngày
   const title = reportWrap.querySelector("h3");
-  if (title) {
-    title.innerHTML = `<i class="fa-solid fa-chart-pie"></i> BÁO CÁO TỔNG THỂ DATA - ${dateText}`;
-  }
+  if (title)
+    title.innerHTML = `
+   <p><img src="./logotarget.png">
+      <span>CRM LEAD REPORT </span></p>
+      ${dateText ? `<p class="report_time">${dateText}</p>` : ""}
+    `;
+
 
   // Render nội dung báo cáo
   const content = reportWrap.querySelector(".dom_ai_report_content");
@@ -423,10 +392,313 @@ function generateAdvancedReport(RAW_DATA) {
 
   console.log("✅ Đã render báo cáo AI cho IDEAS & VTCI.");
 }
+async function generateSaleReportAI(SALE_DATA, saleName = "SALE") {
+  if (!Array.isArray(SALE_DATA) || !SALE_DATA.length) {
+    alert("⚠️ Không có dữ liệu để phân tích!");
+    return;
+  }
+
+  const GROUPED = processCRMData(SALE_DATA);
+  const reportHTML = makeSaleAIReport(GROUPED, SALE_DATA, saleName);
+
+  // 🗓️ Lấy thời gian hiển thị từ DOM
+  const dateText =
+    document.querySelector(".dom_date")?.textContent?.trim() || "";
+
+  // ✅ Cập nhật title trong .dom_ai_report
+  const title = document.querySelector(".dom_ai_report h3");
+  if (title)
+    title.innerHTML = `
+    <p><img src="./logotarget.png">
+      <span>REPORT ${saleName}</span></p>
+      ${dateText ? `<p class="report_time">${dateText}</p>` : ""}
+    `;
+
+  // ✅ Render nội dung báo cáo
+  const wrap = document.querySelector(".dom_ai_report_content");
+  if (!wrap) return console.warn("Không tìm thấy .dom_ai_report_content");
+
+  wrap.innerHTML = `
+    <div class="ai_report_block sale active">
+      <div class="ai_report_inner">${reportHTML}</div>
+    </div>
+  `;
+
+  // ✅ Hiệu ứng fade-in
+  setTimeout(() => {
+    wrap
+      .querySelectorAll(".fade_in_item")
+      .forEach((el, i) => setTimeout(() => el.classList.add("show"), i * 200));
+  }, 500);
+
+  console.log(`✅ Đã render báo cáo AI cho ${saleName}`);
+}
+
+
+// =================================================
+// 🧠 HÀM PHÂN TÍCH CHUYÊN SÂU CHO MỘT SALE
+// =================================================
+function makeSaleAIReport(GROUPED, DATA, saleName = "SALE") {
+  if (!GROUPED?.byTag || !DATA?.length)
+    return `<p class="warn">⚠️ Không có dữ liệu cho ${saleName}.</p>`;
+
+  const totalLeads = DATA.length;
+  const goodTagRe = /Needed|Considering/i;
+  const totalQuality = DATA.filter((l) => goodTagRe.test(l.TagMain)).length;
+  const qualityRateTotal = ((totalQuality / totalLeads) * 100).toFixed(1);
+
+  // === Logo chiến dịch ===
+  const logos = [
+    { match: /facebook|fb/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png" },
+    { match: /google/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png" },
+    { match: /tiktok/i, url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg" },
+    { match: /linkedin/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png" },
+    { match: /zalo/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png" },
+    { match: /ideas/i, url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp" },
+    { match: /vtci/i, url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp" },
+  ];
+  const defaultLogo =
+    "https://ideas.edu.vn/wp-content/uploads/2025/10/ai_icon.webp";
+  const getLogo = (text = "") => {
+    const t = text.toLowerCase();
+    for (const l of logos) if (l.match.test(t)) return l.url;
+    return defaultLogo;
+  };
+
+  // === Tag phổ biến ===
+  const totalByTag = Object.entries(GROUPED.byTag)
+    .map(([tag, arr]) => ({ tag, count: arr.length }))
+    .sort((a, b) => b.count - a.count);
+  const topTag = totalByTag[0];
+  const tagPercent = (v) => ((v / totalLeads) * 100).toFixed(1);
+  const tagHTML = totalByTag
+    .map(
+      (t) =>
+        `<li>${t.tag}: <b>${t.count}</b> (${(
+          (t.count / totalLeads) *
+          100
+        ).toFixed(1)}%)</li>`
+    )
+    .join("");
+
+  // === Degree (đếm từ VIEW_DEGREE) ===
+const degreeHTML = Object.entries(VIEW_DEGREE || {})
+  .filter(([_, v]) => v > 0) // ⚡ chỉ lấy mục có giá trị > 0
+  .map(
+    ([k, v]) =>
+      `<li>${k}: <b>${v}</b> (${((v / totalLeads) * 100).toFixed(1)}%)</li>`
+  )
+  .join("");
+
+
+  // === Chiến dịch ===
+  const campaignStats = [];
+  for (const [camp, srcs] of Object.entries(GROUPED.byCampaign)) {
+    for (const [src, meds] of Object.entries(srcs)) {
+      for (const [med, arr] of Object.entries(meds)) {
+        const total = arr.length;
+        const quality = arr.filter((l) => goodTagRe.test(l.TagMain)).length;
+        campaignStats.push({
+          campaign: camp,
+          source: src,
+          medium: med,
+          total,
+          quality,
+          qualityRate: (quality / total) * 100,
+        });
+      }
+    }
+  }
+  const topByVolume = campaignStats.reduce((a, b) =>
+    b.total > a.total ? b : a
+  );
+  const top3Quality = campaignStats
+    .filter((c) => c.total > 5)
+    .sort((a, b) => b.qualityRate - a.qualityRate)
+    .slice(0, 3);
+
+  // === Theo ngày ===
+  const dates = Object.entries(GROUPED.byDate)
+    .map(([d, v]) => ({ d, total: v.total }))
+    .sort((a, b) => a.d.localeCompare(b.d));
+  const avgPerDay = (totalLeads / (dates.length || 1)).toFixed(1);
+  const trend =
+    dates.length > 2
+      ? dates.at(-1).total > dates.at(-2).total
+        ? "Lead tăng so với hôm qua."
+        : "Lead giảm so với hôm qua."
+      : "";
+  const peakDay = dates.reduce(
+    (a, b) => (b.total > a.total ? b : a),
+    { d: "", total: 0 }
+  );
+
+  // === Nhận định chuyên sâu ===
+  const insightItems = [];
+  if (qualityRateTotal < 20)
+    insightItems.push(
+      `Tỷ lệ lead chất lượng thấp (${qualityRateTotal}%) — cần cải thiện quy trình tư vấn hoặc kịch bản follow-up.`
+    );
+  else if (qualityRateTotal < 45)
+    insightItems.push(
+      `Tỷ lệ lead trung bình (${qualityRateTotal}%) — có thể tối ưu thêm nội dung tư vấn hoặc thời gian phản hồi.`
+    );
+  else
+    insightItems.push(
+      `Tỷ lệ lead chất lượng cao (${qualityRateTotal}%) — hiệu suất tư vấn đang rất tốt.`
+    );
+
+  insightItems.push(
+    `Ngày cao điểm: <b>${peakDay.d || "N/A"}</b> (${peakDay.total} leads).`
+  );
+
+  if (top3Quality[0])
+    insightItems.push(
+      `Chiến dịch hiệu quả nhất: <b>${top3Quality[0].campaign}</b> (${top3Quality[0].qualityRate.toFixed(
+        1
+      )}% Qualified).`
+    );
+
+  const insightHTML = insightItems.map((i) => `<li>${i}</li>`).join("");
+
+  // === Render (giống UI makeDeepReport) ===
+  const renderCampaignItem = (c, i) => `
+    <li>
+      <div class="camp_item">
+        <div class="camp_logo"><img src="${getLogo(
+          c.campaign + c.source
+        )}" alt=""></div>
+        <div class="camp_info">
+          <p class="camp_name"><strong>${i + 1}. ${c.campaign}</strong></p>
+          <p class="camp_source">${c.source} / ${c.medium}</p>
+        </div>
+        <div class="camp_stats">
+          <span class="camp_total">${c.total}</span> leads
+          <span class="camp_quality">(${c.qualityRate.toFixed(
+            1
+          )}% Qualified)</span>
+        </div>
+      </div>
+    </li>`;
+
+  return `
+  <section class="ai_section fade_in_block">
+    <h5 class="fade_in_item delay-1"><i class="fa-solid fa-users"></i> Lead Overview</h5>
+    <ul class="fade_in_item delay-2">
+      <li><strong>Tổng số lead:</strong> <b>${totalLeads.toLocaleString(
+        "vi-VN"
+      )}</b></li>
+      <li><strong>Trung bình mỗi ngày:</strong> <b>${avgPerDay}</b></li>
+      <li><strong>Tỷ lệ lead chất lượng:</strong> <b>${qualityRateTotal}%</b></li>
+      <li><strong>Tag phổ biến nhất:</strong> <b>${topTag.tag}</b> (${tagPercent(
+    topTag.count
+  )}%)</li>
+    </ul>
+
+    <h5 class="fade_in_item delay-3"><i class="fa-solid fa-tags"></i> Phân loại Tag</h5>
+    <ul class="fade_in_item delay-4">${tagHTML}</ul>
+
+    <h5 class="fade_in_item delay-5"><i class="fa-solid fa-graduation-cap"></i> Học vấn</h5>
+    <ul class="fade_in_item delay-6">${degreeHTML}</ul>
+
+    <h5 class="fade_in_item delay-7"><i class="fa-solid fa-bullhorn"></i> Hiệu quả chiến dịch</h5>
+    <ul class="ai_campaign_list fade_in_item delay-8">
+      <li class="camp_top_volume">
+        <div class="camp_item top">
+          <div class="camp_logo"><img src="${getLogo(
+            topByVolume.campaign + topByVolume.source
+          )}" alt=""></div>
+          <div class="camp_info">
+            <p class="camp_name"><strong>Top Lead:</strong> ${topByVolume.campaign}</p>
+            <p class="camp_source">${topByVolume.source} / ${topByVolume.medium}</p>
+          </div>
+          <div class="camp_stats">
+            <span class="camp_total">${topByVolume.total}</span> leads
+            <span class="camp_quality">(${topByVolume.qualityRate.toFixed(
+              1
+            )}% Qualified)</span>
+          </div>
+        </div>
+      </li>
+      <li><strong>Top chiến dịch hiệu quả (Qualified%)</strong></li>
+      ${top3Quality.map(renderCampaignItem).join("")}
+    </ul>
+
+    <h5 class="fade_in_item delay-9"><i class="fa-solid fa-chart-line"></i> Phân tích & Nhận định</h5>
+    <ul class="fade_in_item delay-10 insight_list">${insightHTML}</ul>
+  </section>`;
+}
+
+// Gắn sự kiện sau khi DOM đã render xong (ví dụ trong main hoặc sau render filter)
+function setupSaleAIReportButton() {
+  const btn = document.querySelector(".ai_report_sale");
+  if (!btn) return console.warn("Không tìm thấy nút .ai_report_sale");
+
+  btn.onclick = (e) => {
+    if (!Array.isArray(VIEW_DATA) || !VIEW_DATA.length) {
+      alert("⚠️ Không có dữ liệu để phân tích báo cáo AI!");
+      return;
+    }
+
+    // Lấy tên sale hiện tại
+    const activeSaleEl = document.querySelector(".saleperson_detail .dom_selected");
+    const saleName =
+      activeSaleEl?.textContent?.trim() ||
+      VIEW_DATA[0]?.OwnerIDText ||
+      "Sale";
+
+    // Overlay loading
+    // const overlay = document.querySelector(".dom_overlay_ai");
+    // if (overlay) {
+    //   overlay.classList.add("active");
+    //   overlay.innerHTML =
+    //     '<h5><i class="fa-solid fa-robot fa-spin"></i> Đang phân tích dữ liệu AI...</h5>';
+    // }
+
+    // Gọi hàm chính sau 300ms (giả lập delay nhỏ)
+    setTimeout(() => {
+      generateSaleReportAI(VIEW_DATA, saleName);
+
+      const panel = document.querySelector(".dom_ai_report");
+      if (!panel) return;
+
+      // Kích hoạt panel hiển thị
+      panel.classList.add("active");
+
+      // Cuộn lên đầu (giống generateAdvancedReport)
+      panel.scrollTop = 0;
+
+      // Sau khi render xong, tạo hiệu ứng fade-in tuần tự
+      setTimeout(() => {
+        const items = panel.querySelectorAll(".fade_in_item");
+        items.forEach((el, i) => {
+          setTimeout(() => el.classList.add("show"), i * 300);
+        });
+      }, 2500);
+
+      // Reset overlay trở về “Click to back”
+      // if (overlay) {
+      //   overlay.innerHTML =
+      //     '<h5><i class="fa-solid fa-angles-left"></i> Click to back</h5>';
+      //   overlay.classList.remove("active");
+      // }
+    }, 300);
+  };
+}
 
 // =====================================================
 // 🧠 HÀM PHÂN TÍCH CHUYÊN SÂU CHO MỘT CHI NHÁNH
 // =====================================================
+  const getInitials = (name = "") => {
+    const parts = name.trim().split(/\s+/);
+    return ((parts.at(-1)?.[0] || "") + (parts[0]?.[0] || "")).toUpperCase();
+  };
+  const getColorFromName2 = (name) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++)
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return `hsl(${Math.abs(hash) % 360},70%,65%)`;
+  };
 function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   if (!GROUPED?.byOwner || !DATA?.length)
     return `<p class="warn">⚠️ Không có dữ liệu cho ${orgName}.</p>`;
@@ -492,16 +764,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   };
 
   // === Helper: Avatar & màu ===
-  const getInitials = (name = "") => {
-    const parts = name.trim().split(/\s+/);
-    return ((parts.at(-1)?.[0] || "") + (parts[0]?.[0] || "")).toUpperCase();
-  };
-  const getColorFromName = (name) => {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++)
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return `hsl(${Math.abs(hash) % 360},70%,65%)`;
-  };
+
 
   // === Chiến dịch ===
   const goodTagRe = /Needed|Considering/i;
@@ -668,7 +931,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   const renderSaleItem = (s, label) => `
     <li>
       <div class="sale_item">
-        <div class="sale_avatar" style="background:${getColorFromName(
+        <div class="sale_avatar" style="background:${getColorFromName2(
           s.owner
         )}">${getInitials(s.owner)}</div>
         <div class="sale_info">
@@ -684,14 +947,14 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   <section class="ai_section fade_in_block">
     <h5 class="fade_in_item delay-1"><i class="fa-solid fa-users"></i> Lead</h5>
     <ul class="fade_in_item delay-2">
-      <li><strong><i class="fa-solid fa-caret-right"></i> Tổng số lead:</strong> ${totalLeads.toLocaleString(
+      <li><strong><i class="fa-solid fa-caret-right"></i> Tổng số lead:</strong> <b>${totalLeads.toLocaleString(
         "vi-VN"
-      )}</li>
-      <li><strong><i class="fa-solid fa-caret-right"></i> Trung bình mỗi ngày:</strong> ${avgPerDay} leads/ngày</li>
-      <li><strong><i class="fa-solid fa-caret-right"></i> Tỷ lệ lead chất lượng:</strong> ${qualityRateTotal}%</li>
-      <li><strong><i class="fa-solid fa-caret-right"></i> Tag phổ biến nhất:</strong> ${
+      )}</b></li>
+      <li><strong><i class="fa-solid fa-caret-right"></i> Trung bình mỗi ngày:</strong> <b>${avgPerDay} leads/ngày</b></li>
+      <li><strong><i class="fa-solid fa-caret-right"></i> Tỷ lệ lead chất lượng:</strong> <b>${qualityRateTotal}%</b></li>
+      <li><strong><i class="fa-solid fa-caret-right"></i> Tag phổ biến nhất:</strong> <b>${
         topTag.tag
-      } (${tagPercent(topTag.count)}%)</li>
+      } (${tagPercent(topTag.count)}%)</b></li>
     </ul>
 
     <h5 class="fade_in_item delay-3"><i class="fa-solid fa-bullhorn"></i> Hiệu quả chiến dịch</h5>
@@ -717,7 +980,7 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
           </div>
         </div>
       </li>
-      <li><strong>Top 3 chiến dịch hiệu quả nhất (Qualified%)</strong></li>
+      <li><strong>Top chiến dịch hiệu quả (Qualified%)</strong></li>
       ${top3Quality.map(renderCampaignItem).join("")}
     </ul>
 
@@ -736,12 +999,14 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
 }
 
 async function processAndRenderAll(data) {
+  VIEW_DATA = data
   if (!data?.length) return;
-  GROUPED = processCRMData(data);
+  
+  const t0 = performance.now();
 
-  // 🧠 Gọi hàm báo cáo chuyên sâu (IDEAS trước)
+  GROUPED = await processCRMData(data);
+  console.log(`🧩 Data processed in ${(performance.now() - t0).toFixed(1)}ms`);
 
-  // Tiếp tục phần render chart/table như cũ
   queueMicrotask(() => renderChartsSmoothly(GROUPED, data));
   requestAnimationFrame(() => {
     renderLeadTable(data);
@@ -749,6 +1014,7 @@ async function processAndRenderAll(data) {
     renderSaleFilter(GROUPED);
   });
 }
+
 
 // 🧠 Hàm render chart chia nhỏ batch – không chặn main thread
 function renderChartsSmoothly(GROUPED, data) {
@@ -796,9 +1062,17 @@ function renderChartsSmoothly(GROUPED, data) {
   });
 }
 function processCRMData(data) {
-  // const loadingEl = document.querySelector(".loading");
-  // loadingEl?.classList.add("active");
+  if (!data?.length) return {
+    byDate: Object.create(null),
+    byCampaign: Object.create(null),
+    byOwner: Object.create(null),
+    byTag: Object.create(null),
+    byTagAndDate: Object.create(null),
+    byOrg: Object.create(null),
+    tagFrequency: Object.create(null),
+  };
 
+  // ⚙️ Chuẩn bị cache & biến cục bộ cho tốc độ cao
   const r = {
     byDate: Object.create(null),
     byCampaign: Object.create(null),
@@ -810,101 +1084,96 @@ function processCRMData(data) {
   };
 
   const len = data.length;
-  if (!len) return r;
-
   const tagPriorityLocal = tagPriority || [];
   const getTagsArrayLocal = getTagsArray;
   const getPrimaryTagLocal = getPrimaryTag;
 
-  // Cache cho performance (hạn chế tạo object tạm, truy cập property sâu)
-  for (let i = 0; i < len; i++) {
-    const lead = data[i];
+  // ⚡ Duyệt nhanh — dùng biến tạm, hạn chế truy cập sâu & GC
+  const BATCH = 3000;
+  let i = 0;
 
-    // ==== Chuẩn bị dữ liệu nhanh ====
-    const created = lead.CreatedDate;
-    const date = created ? created.slice(0, 10) : "Date";
+  function processBatch() {
+    const end = Math.min(i + BATCH, len);
+    for (; i < end; i++) {
+      const lead = data[i];
+      const created = lead.CreatedDate;
+      const date = created ? created.slice(0, 10) : "Unknown";
 
-    const tags = getTagsArrayLocal(lead.TagIDText);
-    let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
-    if (mainTag === "Qualified") mainTag = "Needed";
-    if (tags.length === 0) tags.push("Untag");
-    lead.TagMain = mainTag;
+      // === Chuẩn bị dữ liệu nhanh ===
+      const tags = getTagsArrayLocal(lead.TagIDText);
+      let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
+      if (mainTag === "Qualified") mainTag = "Needed";
+      if (tags.length === 0) tags.push("Untag");
+      lead.TagMain = mainTag;
 
-    const org = lead.CustomField16Text || "Org";
-    const campaign = lead.CustomField13Text || "Campaign";
-    const source = lead.CustomField14Text || "Source";
-    const medium = lead.CustomField15Text || "Medium";
+      const org = lead.CustomField16Text || "Org";
+      const campaign = lead.CustomField13Text || "Campaign";
+      const source = lead.CustomField14Text || "Source";
+      const medium = lead.CustomField15Text || "Medium";
 
-    const ownerFull = lead.OwnerIDText || "No Owner";
-    const ownerKey = ownerFull.replace(/\s*\(NV.*?\)\s*/gi, "").trim();
+      const ownerFull = lead.OwnerIDText || "No Owner";
+      const ownerKey = ownerFull.replace(/\s*\(NV.*?\)\s*/gi, "").trim();
 
-    // ==== 1️⃣ Tag Frequency ====
-    for (let j = 0, tlen = tags.length; j < tlen; j++) {
-      const tag = tags[j];
-      const count = r.tagFrequency[tag];
-      r.tagFrequency[tag] = count ? count + 1 : 1;
-    }
+      // ==== 1️⃣ tagFrequency ====
+      const tagLen = tags.length;
+      for (let j = 0; j < tagLen; j++) {
+        const tag = tags[j];
+        r.tagFrequency[tag] = (r.tagFrequency[tag] || 0) + 1;
+      }
 
-    // ==== 2️⃣ byDate ====
-    let dateObj = r.byDate[date];
-    if (!dateObj) dateObj = r.byDate[date] = { total: 0 };
-    dateObj.total++;
-    dateObj[mainTag] = (dateObj[mainTag] || 0) + 1;
+      // ==== 2️⃣ byDate ====
+      const dateObj = (r.byDate[date] ||= { total: 0 });
+      dateObj.total++;
+      dateObj[mainTag] = (dateObj[mainTag] || 0) + 1;
 
-    // ==== 3️⃣ byTag ====
-    (r.byTag[mainTag] ||= []).push(lead);
+      // ==== 3️⃣ byTag ====
+      (r.byTag[mainTag] ||= []).push(lead);
 
-    // ==== 4️⃣ byTagAndDate ====
-    let tagGroup = r.byTagAndDate[mainTag];
-    if (!tagGroup) tagGroup = r.byTagAndDate[mainTag] = Object.create(null);
-    (tagGroup[date] ||= []).push(lead);
+      // ==== 4️⃣ byTagAndDate ====
+      const tagMap = (r.byTagAndDate[mainTag] ||= Object.create(null));
+      (tagMap[date] ||= []).push(lead);
 
-    // ==== 5️⃣ byCampaign ====
-    let campObj = r.byCampaign[campaign];
-    if (!campObj) campObj = r.byCampaign[campaign] = Object.create(null);
-    let sourceObj = campObj[source];
-    if (!sourceObj) sourceObj = campObj[source] = Object.create(null);
-    (sourceObj[medium] ||= []).push(lead);
+      // ==== 5️⃣ byCampaign ====
+      (((r.byCampaign[campaign] ||= Object.create(null))[source] ||= Object.create(null))[medium] ||= []).push(lead);
 
-    // ==== 6️⃣ byOwner ====
-    let ownerObj = r.byOwner[ownerKey];
-    if (!ownerObj) {
-      ownerObj = r.byOwner[ownerKey] = {
+      // ==== 6️⃣ byOwner ====
+      const ownerObj = (r.byOwner[ownerKey] ||= {
         total: 0,
         tags: Object.create(null),
         leads: [],
-      };
-    }
-    ownerObj.total++;
-    ownerObj.leads.push(lead);
+      });
+      ownerObj.total++;
+      ownerObj.leads.push(lead);
 
-    let ownerTagObj = ownerObj.tags[mainTag];
-    if (!ownerTagObj)
-      ownerTagObj = ownerObj.tags[mainTag] = { count: 0, leads: [] };
-    ownerTagObj.count++;
-    ownerTagObj.leads.push(lead);
+      const ownerTag = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
+      ownerTag.count++;
+      ownerTag.leads.push(lead);
 
-    // ==== 7️⃣ byOrg ====
-    let orgObj = r.byOrg[org];
-    if (!orgObj) {
-      orgObj = r.byOrg[org] = {
+      // ==== 7️⃣ byOrg ====
+      const orgObj = (r.byOrg[org] ||= {
         total: 0,
         tags: Object.create(null),
         owners: Object.create(null),
         byDate: Object.create(null),
-      };
+      });
+      orgObj.total++;
+      (orgObj.tags[mainTag] ||= []).push(lead);
+      (orgObj.owners[ownerKey] ||= []).push(lead);
+      (orgObj.byDate[date] ||= []).push(lead);
     }
-    orgObj.total++;
-    (orgObj.tags[mainTag] ||= []).push(lead);
-    (orgObj.owners[ownerKey] ||= []).push(lead);
-    (orgObj.byDate[date] ||= []).push(lead);
+
+    if (i < len) {
+      // 🔹 Nhường thread cho browser trước khi xử lý batch tiếp theo
+      setTimeout(processBatch, 0);
+    }
   }
 
-  // Dọn loading nhẹ nhàng sau 1 tick
-  // setTimeout(() => loadingEl?.classList.remove("active"), 150);
+  // 🚀 Bắt đầu xử lý theo batch (tránh block UI)
+  processBatch();
 
   return r;
 }
+
 
 document.addEventListener("DOMContentLoaded", () => {
   const menuItems = document.querySelectorAll(".dom_menu li");
@@ -1584,7 +1853,7 @@ function setupClearFilter() {
         (l) => l.CustomField16Text?.trim().toUpperCase() == "IDEAS"
       );
     }
-    console.log(currentAccount);
+  
 
     // ✅ Process lại
     setActiveAccountUI(currentAccount);
@@ -1741,15 +2010,7 @@ function setupAccountFilter() {
       e.stopPropagation();
       const account = li.querySelector("p span:first-child").textContent.trim();
 
-      // Lưu & set UI
-      localStorage.setItem("selectedAccount", account);
-      setActiveAccountUI(account);
-      list.classList.remove("active");
-
-      // ✅ Clear toàn bộ campaign/source/medium filter
-      clearAllDropdownFilters();
-
-      // 🔹 Lọc dữ liệu theo account
+      // Lọc dữ liệu theo account
       let filtered = RAW_DATA;
       if (account === "VTCI") {
         filtered = RAW_DATA.filter(
@@ -1761,16 +2022,35 @@ function setupAccountFilter() {
         );
       }
 
-      // 🔹 Process lại và render lại toàn bộ dashboard
+      // ⚠️ Nếu không có dữ liệu → cảnh báo & giữ nguyên UI
+      if (!filtered?.length) {
+        alert(`⚠️ Không có dữ liệu cho account "${account}", vui lòng chọn khoảng thời gian khác!`);
+        console.warn(`⚠️ Account ${account} không có dữ liệu, giữ nguyên dashboard.`);
+        list.classList.remove("active");
+        return; // ⛔ Không đổi UI, không render lại
+      }
+
+      // ✅ Có dữ liệu → cập nhật localStorage + UI
+      localStorage.setItem("selectedAccount", account);
+      list.classList.remove("active");
+
+      // ✅ Clear toàn bộ campaign/source/medium filter
+      clearAllDropdownFilters();
+
+      console.log(`✅ ${filtered.length} leads thuộc account ${account}`);
+      setActiveAccountUI(account);
+
+      // 🔹 Process & render lại dashboard
       processAndRenderAll(filtered);
     };
   });
 
-  // 🔹 Đóng khi click ngoài
+  // 🔹 Đóng dropdown khi click ngoài
   document.addEventListener("click", (e) => {
     if (!wrap.contains(e.target)) list.classList.remove("active");
   });
 }
+
 
 function setupTimeDropdown() {
   const timeSelect = document.querySelector(".dom_select.time");
@@ -2076,7 +2356,16 @@ function mergeAllArrays(obj) {
   }
 
   return result;
+}function setSourceActive() {
+  const btnSource = document.querySelector(".btn-source");
+  const btnCampaign = document.querySelector(".btn-campaign");
+
+  if (btnSource && btnCampaign) {
+    btnCampaign.classList.remove("active");
+    btnSource.classList.add("active");
+  }
 }
+
 function renderToplist(grouped, mode = "default") {
   const wrap = document.querySelector(".dom_toplist_wrap .dom_toplist");
   const dashboard = document.querySelector(".dom_dashboard");
@@ -2212,6 +2501,7 @@ function renderToplist(grouped, mode = "default") {
   // 🔹 Click lọc theo campaign/source/medium
   wrap.querySelectorAll(".toplist_more_ads").forEach((btn) => {
     btn.addEventListener("click", (e) => {
+      setSourceActive()
       const li = e.currentTarget.closest("li");
       const campaign = li.dataset.campaign;
       const source = li.dataset.source;
@@ -2269,6 +2559,7 @@ document.addEventListener("click", (e) => {
       dashboard.classList.remove("sale_detail_ads", "sale_detail");
       if (ORIGINAL_DATA) processAndRenderAll(ORIGINAL_DATA);
     }
+    setSourceActive()
     return; // ngăn xử lý tiếp
   }
 
@@ -2990,11 +3281,19 @@ function renderTagFrequency(grouped) {
 }
 
 function renderDegreeChart(grouped) {
+  console.log("renderDegreeChart grouped:", grouped);
+
   const ctx = document.getElementById("degreeChart");
   const top_edu = document.getElementById("top_edu");
-  if (!ctx || !Array.isArray(grouped)) return;
+  if (!ctx) return;
 
-  // 🧩 Regex pre-compile — giảm CPU
+  // ⚙️ Nếu grouped không phải array (ví dụ GROUPED object) thì flatten
+  const data = Array.isArray(grouped)
+    ? grouped
+    : Object.values(grouped.byOwner || {}).flatMap(o => o.leads || []);
+  if (!data.length) return;
+
+  // 🧩 Regex pre-compile
   const regex = {
     duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
     caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
@@ -3012,126 +3311,104 @@ function renderDegreeChart(grouped) {
     Khác: 0,
   };
 
-  // 🔹 Chia batch để render mượt UI (chỉ cần khi grouped lớn)
-  let i = 0;
-  const chunk = 500; // quét 500 lead/lần cho nhanh mà vẫn mượt
+  // 🔹 Xử lý một lần
+  for (let i = 0; i < data.length; i++) {
+    const desc = (data[i].Description || "").toLowerCase();
+    if (regex.duoiCD.test(desc)) degreeCounts["Dưới cao đẳng"]++;
+    else if (regex.caoDang.test(desc)) degreeCounts["Cao đẳng"]++;
+    else if (regex.thpt.test(desc)) degreeCounts["THPT"]++;
+    else if (regex.cuNhan.test(desc)) degreeCounts["Cử nhân"]++;
+    else if (regex.sinhVien.test(desc)) degreeCounts["Sinh viên"]++;
+    else if (desc.trim() !== "") degreeCounts["Khác"]++;
+  }
+VIEW_DEGREE = degreeCounts
+  console.log("🎓 degreeCounts:", degreeCounts);
 
-  function processChunk(deadline) {
-    while (i < grouped.length && deadline.timeRemaining() > 4) {
-      const desc = (grouped[i].Description || "").toLowerCase();
-      if (regex.duoiCD.test(desc)) degreeCounts["Dưới cao đẳng"]++;
-      else if (regex.caoDang.test(desc)) degreeCounts["Cao đẳng"]++;
-      else if (regex.thpt.test(desc)) degreeCounts["THPT"]++;
-      else if (regex.sinhVien.test(desc)) degreeCounts["Sinh viên"]++;
-      else if (regex.cuNhan.test(desc)) degreeCounts["Cử nhân"]++;
-      else if (desc.trim() !== "") degreeCounts["Khác"]++;
-      i++;
-    }
+  // ⚙️ Cập nhật chart
+  const labels = Object.keys(degreeCounts);
+  const values = Object.values(degreeCounts);
+  const maxValue = Math.max(...values);
+  const barColors = values.map(v => v === maxValue ? "#ffa900" : "#d9d9d9");
 
-    if (i < grouped.length) {
-      requestIdleCallback(processChunk);
-    } else {
-      updateChart();
-    }
+  // 🏆 Gán top
+  if (top_edu && maxValue > 0) {
+    const maxIndex = values.indexOf(maxValue);
+    top_edu.textContent = labels[maxIndex] || "";
   }
 
-  // ⚙️ Cập nhật chart khi xử lý xong
-  function updateChart() {
-    const labels = Object.keys(degreeCounts);
-    const values = Object.values(degreeCounts);
-    const maxValue = Math.max(...values);
-    const barColors = values.map((v) =>
-      v === maxValue ? "#ffa900" : "#d9d9d9"
-    );
-
-    // Gán top
-    if (top_edu && maxValue > 0) {
-      const maxIndex = values.indexOf(maxValue);
-      top_edu.textContent = labels[maxIndex] || "";
+  // 🔄 Nếu chart đã có → update
+  if (window.degreeChartInstance) {
+    const chart = window.degreeChartInstance;
+    if (JSON.stringify(chart.data.datasets[0].data) !== JSON.stringify(values)) {
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = values;
+      chart.data.datasets[0].backgroundColor = barColors;
+      chart.data.datasets[0].borderColor = barColors;
+      chart.update();
     }
-
-    // 🔄 Nếu chart tồn tại, update nhẹ
-    if (window.degreeChartInstance) {
-      const chart = window.degreeChartInstance;
-      // ⚡ Chỉ update nếu khác data
-      if (
-        JSON.stringify(chart.data.datasets[0].data) !== JSON.stringify(values)
-      ) {
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = values;
-        chart.data.datasets[0].backgroundColor = barColors;
-        chart.data.datasets[0].borderColor = barColors;
-        chart.update();
-      }
-      return;
-    }
-
-    // 🚀 Chart mới
-    window.degreeChartInstance = new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Số lượng học viên theo trình độ học vấn",
-            data: values,
-            backgroundColor: barColors,
-            borderColor: barColors,
-            borderWidth: 1,
-            borderRadius: 6,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-          duration: 400, // nhanh hơn 2 lần
-          easing: "easeOutCubic",
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => `${ctx.parsed.y.toLocaleString()} học viên`,
-            },
-          },
-          datalabels: {
-            anchor: "end",
-            align: "end",
-            font: { weight: "bold", size: 12 },
-            formatter: (v) => (v > 0 ? v : ""),
-          },
-        },
-        scales: {
-          x: {
-            grid: {
-              color: "rgba(0,0,0,0.05)",
-              drawTicks: false,
-              drawBorder: false,
-            },
-            ticks: { font: { size: 12 }, color: "#555" },
-          },
-          y: {
-            beginAtZero: true,
-            ticks: {
-              font: { size: 11 },
-              color: "#666",
-              stepSize: Math.ceil(maxValue / 4) || 1,
-              callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
-            },
-            afterDataLimits: (scale) => (scale.max *= 1.1),
-            grid: { color: "rgba(0,0,0,0.05)" },
-          },
-        },
-      },
-      plugins: [ChartDataLabels],
-    });
+    return;
   }
 
-  // 🏁 Bắt đầu xử lý
-  requestIdleCallback(processChunk);
+  // 🚀 Tạo chart mới
+  window.degreeChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Số lượng học viên theo trình độ học vấn",
+          data: values,
+          backgroundColor: barColors,
+          borderColor: barColors,
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400, easing: "easeOutCubic" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y.toLocaleString()} học viên`,
+          },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: { weight: "bold", size: 12 },
+          formatter: (v) => (v > 0 ? v : ""),
+        },
+      },
+      scales: {
+        x: {
+          grid: {
+            color: "rgba(0,0,0,0.05)",
+            drawTicks: false,
+            drawBorder: false,
+          },
+          ticks: { font: { size: 12 }, color: "#555" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 11 },
+            color: "#666",
+            stepSize: Math.ceil(maxValue / 4) || 1,
+            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
+          },
+          afterDataLimits: (scale) => (scale.max *= 1.1),
+          grid: { color: "rgba(0,0,0,0.05)" },
+        },
+      },
+    },
+    plugins: [ChartDataLabels],
+  });
 }
+
 
 function renderProgramChart(grouped) {
   const ctx = document.getElementById("programChart");
@@ -3531,6 +3808,7 @@ function renderToplistBySale(grouped) {
   // 🔹 Click lọc theo sale
   wrap.querySelectorAll(".toplist_more").forEach((btn) => {
     btn.addEventListener("click", (e) => {
+      setSourceActive()
       const li = e.currentTarget.closest("li");
       const saleName = li.dataset.owner;
       if (!saleName) return;
@@ -3614,4 +3892,31 @@ function renderSaleDropdown() {
 
     dropdown.appendChild(li);
   });
+}
+
+
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".btn_download_pdf");
+  if (!btn) return;
+  triggerPrintReport();
+});
+
+function triggerPrintReport() {
+  const report = document.querySelector(".dom_ai_report");
+  if (!report) return alert("⚠️ Không tìm thấy báo cáo!");
+
+  // 🧩 1️⃣ Thêm class CSS trước khi in
+  report.classList.add("printing");
+
+  // 🕓 2️⃣ Đợi CSS apply rồi gọi print
+  setTimeout(() => {
+    window.print();
+
+    // 🧼 3️⃣ Sau khi in xong, gỡ class
+    // (browser không có event “print done”, nên dùng delay nhỏ)
+    setTimeout(() => {
+      report.classList.remove("printing");
+    }, 1000);
+  }, 300);
 }
