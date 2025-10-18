@@ -1847,6 +1847,41 @@ tbody {
   margin-top: 1rem;
   font-weight: normal !important;
 }
+.dom_overlay_ai_text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 2rem;
+  color: rgba(255, 255, 255, 0.918);
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  z-index: 999999999;
+  opacity: 0;
+  transition: 0.3s ease;
+}
+.dom_ai_report.active ~ .dom_overlay_ai_text {
+  animation: fadeOverlay 2.6s ease forwards;
+}
+
+/* Định nghĩa animation */
+@keyframes fadeOverlay {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 /* ⚡ Animation tổng thể cho mỗi section */
 .fade_in_item {
   opacity: 0;
@@ -1918,3 +1953,34 @@ tbody {
     display: none !important;
   }
 }
+
+
+
+.loader_ai{
+      font-size: 2rem;
+      color: #FFF;
+      display: inline-block;
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: 400;
+      position: relative;
+    }
+    .loader_ai:after{
+     content: 'Analyzing data';
+      position: relative;
+      z-index: 5;
+    }
+    .loader_ai:before{
+      content: '';
+      height: 6px;
+      border: 1px solid;
+      border-radius: 10px;
+      width: 100%;
+      position: absolute;
+      bottom: -1rem;
+      background: linear-gradient(#ffa900 100%, transparent 0) no-repeat;
+      background-size: 0% auto;
+    }
+.dom_ai_report.active ~ .dom_overlay_ai_text .loader_ai:before {
+  animation: 2.5s lineGrow linear;
+}
+    @keyframes lineGrow {to {  background-size: 100% auto}}
