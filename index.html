@@ -141,7 +141,7 @@
             <div class="dom_filter">
               <div class="toogle_filter box_shadow ai_report">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <p>AI Report</p>
+                <p>AI Summary</p>
               </div>
               <div>
                 <div class="dom_select campaign">
@@ -204,6 +204,7 @@
         </div>
         <div class="dom_dashboard">
           <div class="dom_row flex sale_report">
+           
             <i class="fa-solid fa-xmark sale_report_close"></i>
             <div class="dom_select saleperson_detail">
               <img
@@ -238,6 +239,10 @@
               <i class="fa-solid fa-calendar-days"></i> Detail data:
               <span class="sale_report_calender">1/1/2025 - 10/1/2025</span>
             </h4>
+             <div class="toogle_filter box_shadow ai_report_sale">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <p>AI Summary</p>
+              </div>
           </div>
           <div class="dom_row flex um">
             <div class="dom_inner w20 box_shadow chart">
@@ -396,6 +401,23 @@
               </div>
             </div>
           </div>
+          <div class="dom_row table flex">
+            <div class="dom_inner table">
+              <div class="dom_table_filter">
+                <h2>
+                  <i class="fa-solid fa-table-list main_clr"></i> Detail Lead:
+                </h2>
+                <div>
+                  <input
+                    class="dom_search"
+                    placeholder="Find by Email or Phone number"
+                  />
+                  <p id="find_data">Filter</p>
+                </div>
+              </div>
+              <div class="dom_table_box"></div>
+            </div>
+          </div>
         </div>
         <div class="dom_sale">
           <div class="dom_row flex">
@@ -516,34 +538,21 @@
           </div>
         </div>
         <div class="dom_table">
-          <div class="dom_row table flex">
-            <div class="dom_inner table">
-              <div class="dom_table_filter">
-                <h2>
-                  <i class="fa-solid fa-table-list main_clr"></i> Detail Lead:
-                </h2>
-                <div>
-                  <input
-                    class="dom_search"
-                    placeholder="Find by Email or Phone number"
-                  />
-                  <p id="find_data">Filter</p>
-                </div>
-              </div>
-              <div class="dom_table_box"></div>
-            </div>
-          </div>
+          
         </div>
-        <div class="dom_ai_report">
+        <div class="dom_ai_report ">
           <i class="fa-solid fa-xmark dom_ai_report_close"></i>
-          <h3><i class="fa-solid fa-chart-pie"></i> BÁO CÁO TỔNG THỂ DATA -</h3>
+          <h3><i class="fa-solid fa-robot"></i> REPORT FOR -</h3>
           <div class="dom_ai_report_content"></div>
+          <button class="btn_download_pdf">
+ <i class="fa-solid fa-circle-down"></i>
+</button>
+
         </div>
         <div class="dom_overlay">
           <h5><i class="fa-solid fa-angles-left"></i> Click to return</h5>
         </div>
         <div class="dom_overlay_ai">
-          <!-- <h5><i class="fa-solid fa-angles-left"></i> Click to back</h5> -->
         </div>
       </div>
     </section>
