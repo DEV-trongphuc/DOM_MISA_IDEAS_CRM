@@ -8,6 +8,7 @@
 let CRM_DATA = [];
 let VIEW_DATA = []
 let VIEW_DEGREE = []
+let ACCOUNT_DATA
 function waitForOTP() {
   return new Promise((resolve, reject) => {
     const container = document.querySelector(".dom_accounts");
@@ -315,13 +316,14 @@ async function main() {
   RAW_DATA = await fetchLeads(initRange.from, initRange.to);
   console.log(`✅ FetchLeads done in ${(performance.now() - t0).toFixed(1)}ms`);
 
-  await processAndRenderAll(RAW_DATA);
+  await processAndRenderAll(RAW_DATA, true);
   setupTimeDropdown();
   setupAccountFilter();
   setupClearFilter();
   setupQualityFilter();
   setupLeadSearch();
   setupDropdowns();
+  setupTagClick();
 setupSaleAIReportButton();
   performance.mark("end_main");
   console.log(
@@ -458,7 +460,7 @@ function makeSaleAIReport(GROUPED, DATA, saleName = "SALE") {
     { match: /vtci/i, url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp" },
   ];
   const defaultLogo =
-    "https://ideas.edu.vn/wp-content/uploads/2025/10/ai_icon.webp";
+    "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
   const getLogo = (text = "") => {
     const t = text.toLowerCase();
     for (const l of logos) if (l.match.test(t)) return l.url;
@@ -998,26 +1000,31 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
   </section>`;
 }
 
-async function processAndRenderAll(data) {
+async function processAndRenderAll(data, isLoad) {
   VIEW_DATA = data
   if (!data?.length) return;
   
   const t0 = performance.now();
-
+  
   GROUPED = await processCRMData(data);
+  if(isLoad) {
+    ACCOUNT_DATA = GROUPED
+  }
   console.log(`🧩 Data processed in ${(performance.now() - t0).toFixed(1)}ms`);
 
-  queueMicrotask(() => renderChartsSmoothly(GROUPED, data));
+  queueMicrotask(() => renderChartsSmoothly(GROUPED));
   requestAnimationFrame(() => {
     renderLeadTable(data);
-    renderFilterOptions(data);
+    renderFilterOptions(GROUPED);
     renderSaleFilter(GROUPED);
   });
 }
 
 
 // 🧠 Hàm render chart chia nhỏ batch – không chặn main thread
-function renderChartsSmoothly(GROUPED, data) {
+function renderChartsSmoothly(GROUPED) {
+  console.log(GROUPED);
+  
   const chartTasks = [
     () => renderLeadTrendChart(GROUPED),
     () => renderLeadQualityMeter(GROUPED),
@@ -1027,7 +1034,7 @@ function renderChartsSmoothly(GROUPED, data) {
     () => renderTagFrequency(GROUPED),
     () => renderProgramChart(GROUPED),
     () => renderLeadTagChart(GROUPED),
-    () => renderDegreeChart(data),
+    () => renderDegreeChart(GROUPED),
   ];
 
   let idx = 0;
@@ -1211,7 +1218,7 @@ function renderSaleFilter(grouped) {
 // ============================
 // RENDER FILTERS
 // ============================
-function renderFilterOptions(data) {
+function renderFilterOptions(grouped) {
   const campaignSelect = document.querySelector(
     ".dom_select.campaign ul.dom_select_show"
   );
@@ -1227,7 +1234,7 @@ function renderFilterOptions(data) {
   mediumSelect.innerHTML = "";
 
   // ✅ 1️⃣ Campaign luôn render theo dữ liệu gốc (RAW_DATA)
-  const groupedAll = processCRMData(data);
+  const groupedAll = ACCOUNT_DATA;
   for (const [campaign, sources] of Object.entries(groupedAll.byCampaign)) {
     const total = Object.values(sources)
       .flatMap((s) => Object.values(s))
@@ -1244,7 +1251,7 @@ function renderFilterOptions(data) {
   // ✅ 2️⃣ Source & Medium chỉ render từ dữ liệu hiện tại (GROUPED)
   // --- Sources ---
   const sourcesMap = {};
-  for (const sources of Object.values(GROUPED.byCampaign)) {
+  for (const sources of Object.values(grouped.byCampaign)) {
     for (const [src, mediums] of Object.entries(sources)) {
       sourcesMap[src] =
         (sourcesMap[src] || 0) + Object.values(mediums).flat().length;
@@ -1262,7 +1269,7 @@ function renderFilterOptions(data) {
 
   // --- Mediums ---
   const mediumMap = {};
-  for (const sources of Object.values(GROUPED.byCampaign)) {
+  for (const sources of Object.values(grouped.byCampaign)) {
     for (const mediums of Object.values(sources)) {
       for (const [m, leads] of Object.entries(mediums)) {
         mediumMap[m] = (mediumMap[m] || 0) + leads.length;
@@ -2041,7 +2048,7 @@ function setupAccountFilter() {
       setActiveAccountUI(account);
 
       // 🔹 Process & render lại dashboard
-      processAndRenderAll(filtered);
+      processAndRenderAll(filtered, true);
     };
   });
 
@@ -2102,7 +2109,7 @@ function setupTimeDropdown() {
       // ✅ Reset account về “Total Data”
       localStorage.setItem("selectedAccount", "Total Data");
       setActiveAccountUI("Total Data");
-      processAndRenderAll(RAW_DATA);
+      processAndRenderAll(RAW_DATA, true);
       list.classList.remove("active");
     };
   });
@@ -2130,7 +2137,7 @@ function setupTimeDropdown() {
 
     // ✅ Fetch lại
     RAW_DATA = await fetchLeads(start, end);
-    processAndRenderAll(RAW_DATA);
+    processAndRenderAll(RAW_DATA, true);
     // ✅ Reset account về “Total Data”
     localStorage.setItem("selectedAccount", "Total Data");
     setActiveAccountUI("Total Data");
@@ -3210,6 +3217,44 @@ function renderLeadTable(leads) {
     }
   });
 }
+function setupTagClick() {
+  const wrap = document.querySelector(".frequency_tag");
+  if (!wrap) return;
+
+  // 🧠 Chỉ gắn 1 listener duy nhất
+  wrap.addEventListener("click", (e) => {
+    // 🔍 Tìm phần tử tag thật sự được click
+    const tagEl = e.target.closest(".freq_tag_item");
+    if (!tagEl || !wrap.contains(tagEl)) return;
+
+    const tagName = tagEl.querySelector(".tag_name")?.innerText.trim();
+    if (!tagName) return;
+
+    // 🎨 Hiệu ứng active
+    wrap.querySelectorAll(".freq_tag_item").forEach((t) => t.classList.remove("active"));
+    tagEl.classList.add("active");
+
+    // 🔍 Lọc dữ liệu theo tag
+    const leads = RAW_DATA.filter((lead) => {
+      const tagText = lead.TagIDText || "";
+      return tagText.includes(tagName);
+    });
+
+    if (leads.length) {
+      processAndRenderAll(leads);
+    } else {
+      console.warn(`Không có lead nào thuộc tag "${tagName}"`);
+    }
+
+    // 🌈 Cập nhật dashboard
+    const dashboard = document.querySelector(".dom_dashboard");
+    const saleDetailUI = document.querySelector(".saleperson_detail");
+    const saleDetailUIimg = document.querySelector(".saleperson_detail > img");
+    dashboard?.classList.add("sale_detail_ads");
+    saleDetailUI.querySelector(".dom_selected").innerText = tagName;
+    saleDetailUIimg.src = "./tag.png"
+  });
+}
 
 // ======================  CHART ======================
 
@@ -3231,6 +3276,7 @@ function renderTagFrequency(grouped) {
     "Unqualified",
     "Status - New",
     "Junk",
+    "Untag",
     "BBA",
   ]);
 
