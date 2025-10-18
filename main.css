@@ -1248,7 +1248,7 @@ tbody {
   display: flex !important;
 }
 .dom_container.sale .dom_row.table {
-  display: flex !important;
+  /* display: flex !important; */
 }
 .dom_container.dashboard .dom_table .dom_row {
   display: flex;
@@ -1430,13 +1430,24 @@ tbody {
 .dom_ai_report_close:hover {
   color: var(--mainClr);
 }
+.btn_download_pdf {
+  position: absolute; 
+  bottom: 2rem;
+  right:  4rem;
+  background-color: var(--mainClr);
+  color: white;
+  font-size: 2.5rem;
+  padding: 1rem;
+  border-radius: 50rem;
+  box-shadow: rgb(0, 0, 0, 0.2);
+}
 .dom_bold {
   font-weight: bold;
 }
 .dom_ai_report.active {
   position: fixed !important;
   background: #fffef9;
-  z-index: 99999999999999;
+  z-index: 99999;
   top: 50%;
   transform: translateY(-50%);
   right: 0;
@@ -1470,15 +1481,24 @@ tbody {
 }
 /* Hiệu ứng trượt */
 
+.ai_report_sale,
 .ai_report {
+      display: flex;
+    gap: 1rem;
+    padding: 1rem 2rem;
+    cursor: pointer;
   background: linear-gradient(135deg, var(--mainClr) 0%, #d88200ee 100%);
   color: white;
   font-weight: bold;
   box-shadow: 0 0 5px rgb(0 0 0 / 20%);
   transition: all 0.3s ease;
   animation: gelatine 0.5s 1;
+  border-radius: 50rem;
 }
-
+.ai_report_sale {
+  justify-self: flex-end;
+}
+.ai_report_sale:hover ,
 .ai_report:hover {
   animation: gelatineHover 0.5s 1;
 }
@@ -1541,8 +1561,20 @@ tbody {
   font-size: 2rem;
   font-weight: bold;
   color: #313131e0;
+  margin-bottom: 3rem;
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+.dom_ai_report h3 > p:first-child {
   display: flex;
   align-items: center;
+}
+.dom_ai_report h3  img {
+  width: 5rem;
+  height: auto;
+  margin-right: 1rem;
+  display: inline;
 }
 .ai_report_block.vtci {
   margin-top: 15rem;
@@ -1573,11 +1605,14 @@ tbody {
 }
 .dom_ai_report_content {
   line-height: 1.4;
-  margin-top: 3rem;
+  margin-top: 1rem;
   height: 90vh;
   padding-bottom: 15rem;
   overflow: auto;
   padding-right: 2rem;
+}
+.dom_ai_report_content b {
+  font-weight: bold;
 }
 .dom_ai_report h4 {
   display: flex;
@@ -1670,18 +1705,32 @@ tbody {
   transition: 0.3s ease;
   z-index: 999;
 }
+.dom_overlay_ai {
+  z-index: 9999999999999999998;
+  background-color: rgb(0, 0, 0, 0.1);
+
+ 
+}
+.report_time {
+  font-size: 1.6rem;
+  display: block;
+  width: max-content;
+  padding: 0.5rem 1rem;
+  background-color: #ffaa001e;
+  border-radius: 15px;
+}
 .dom_ai_report.active ~ .dom_overlay_ai {
   position: fixed;
   inset: 0;
-  z-index: 999;
+  z-index: 9999;
   pointer-events: none;
   border-radius: 0;
   background: linear-gradient(
     120deg,
-    rgba(255, 166, 0, 0.3),
-    rgba(255, 0, 128, 0.25),
-    rgba(0, 191, 255, 0.3),
-    rgba(255, 166, 0, 0.3)
+    rgba(255, 166, 0, 0.5),
+    rgba(255, 0, 128, 0.5),
+    rgba(0, 191, 255, 0.5),
+   rgba(255, 166, 0, 0.5)
   );
   background-size: 300% 100%;
   filter: blur(80px);
@@ -1795,4 +1844,65 @@ tbody {
 .fade_in_item.show {
   opacity: 1;
   transform: translateY(0);
+}
+@media print {
+  /* Ẩn toàn bộ nội dung mặc định */
+  body * {
+    visibility: hidden !important;
+  }
+  .ai_section {
+  font-size: 1.8rem !important;
+}
+  .dom_ai_report {
+    background-color: #ffffff !important;
+    box-shadow: unset !important;
+    width: 500% !important;
+    /* scale: 1.2 !important; */
+  }
+  /* Chỉ hiển thị phần .dom_ai_report */
+  .dom_ai_report, 
+  .dom_ai_report * {
+    visibility: visible !important;
+  }
+.dom_ai_report h3 {
+  font-size: 3rem !important;
+}
+.report_time {
+  font-size: 1.8rem !important;
+}
+.dom_ai_report h5 {
+  font-size: 2rem !important;
+  border-top: unset !important;
+}
+
+  /* Giữ layout đúng chỗ */
+  .dom_ai_report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Tùy chọn: giữ màu nền và ảnh */
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: #fff !important;
+  }
+
+  /* Ẩn nút hoặc icon không cần in */
+  .btn_download_pdf,
+  .dom_ai_report_close {
+    display: none !important;
+  }
+    .dom_ai_report_content {
+    overflow: visible !important;
+    max-height: none !important;
+    scrollbar-width: none !important;
+  }
+
+  /* Ẩn thanh cuộn (Firefox + Chrome) */
+  .dom_ai_report_content::-webkit-scrollbar {
+    display: none !important;
+  }
 }
