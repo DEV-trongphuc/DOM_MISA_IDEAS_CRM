@@ -324,7 +324,7 @@ async function main() {
   setupLeadSearch();
   setupDropdowns();
   setupTagClick();
-setupSaleAIReportButton();
+// setupSaleAIReportButton();
   performance.mark("end_main");
   console.log(
     "⏱ Total main():",
@@ -431,7 +431,7 @@ async function generateSaleReportAI(SALE_DATA, saleName = "SALE") {
     wrap
       .querySelectorAll(".fade_in_item")
       .forEach((el, i) => setTimeout(() => el.classList.add("show"), i * 200));
-  }, 500);
+  }, 3000);
 
   console.log(`✅ Đã render báo cáo AI cho ${saleName}`);
 }
@@ -658,7 +658,6 @@ function setupSaleAIReportButton() {
     // }
 
     // Gọi hàm chính sau 300ms (giả lập delay nhỏ)
-    setTimeout(() => {
       generateSaleReportAI(VIEW_DATA, saleName);
 
       const panel = document.querySelector(".dom_ai_report");
@@ -666,25 +665,8 @@ function setupSaleAIReportButton() {
 
       // Kích hoạt panel hiển thị
       panel.classList.add("active");
-
       // Cuộn lên đầu (giống generateAdvancedReport)
       panel.scrollTop = 0;
-
-      // Sau khi render xong, tạo hiệu ứng fade-in tuần tự
-      setTimeout(() => {
-        const items = panel.querySelectorAll(".fade_in_item");
-        items.forEach((el, i) => {
-          setTimeout(() => el.classList.add("show"), i * 300);
-        });
-      }, 2500);
-
-      // Reset overlay trở về “Click to back”
-      // if (overlay) {
-      //   overlay.innerHTML =
-      //     '<h5><i class="fa-solid fa-angles-left"></i> Click to back</h5>';
-      //   overlay.classList.remove("active");
-      // }
-    }, 300);
   };
 }
 
@@ -2593,6 +2575,28 @@ document.addEventListener("click", (e) => {
         setTimeout(() => el.classList.add("show"), i * 300); // 0.3s mỗi item
       });
     }, 3000);
+
+    return; // chặn event tiếp
+  }
+  const aiBtnS = e.target.closest(".ai_report_sale");
+  if (aiBtnS) {
+    const panel = document.querySelector(".dom_ai_report");
+    if (!panel) return;
+ const activeSaleEl = document.querySelector(".saleperson_detail .dom_selected");
+    const saleName =
+      activeSaleEl?.textContent?.trim() ||
+      VIEW_DATA[0]?.OwnerIDText ||
+      "Sale";
+      generateSaleReportAI(VIEW_DATA, saleName);
+    // Kích hoạt panel
+    panel.classList.add("active");
+
+    // Scroll panel lên đầu
+    panel.scrollTop = 0;
+    // Hoặc nếu muốn cuộn cả body theo panel: panel.scrollIntoView({ behavior: "smooth" });
+
+    // Sau 3s (giả lập load + chờ), cho từng item fade-in
+
 
     return; // chặn event tiếp
   }
