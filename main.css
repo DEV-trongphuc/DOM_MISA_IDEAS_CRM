@@ -2315,3 +2315,18 @@ tbody {
   padding: 1rem 0;
 }
 /* Thêm vào thẻ <style> của bạn */
+.dom_select.compare {
+  padding-left: 1rem
+}
+/* Ẩn ban đầu */
+.dom_fade_item {
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: opacity 0.5s ease-out, transform 1s ease-out;
+}
+
+/* Khi add class này thì hiện ra */
+.dom_fade_item.show {
+  opacity: 1;
+  transform: translateX(0);
+}
