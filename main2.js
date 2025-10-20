@@ -3165,36 +3165,35 @@ function renderLeadTable(leads) {
         ? new Date(CreatedDate).toLocaleDateString("vi-VN")
         : "-";
 
-      let tagHtml = "-";
-      if (TagIDText?.trim()) {
-        const tags = TagIDText.split(",")
-          .map((t) => t.trim())
-          .filter(Boolean)
-          .map((tag) => {
-            const tagClass = /Needed/i.test(tag)
-              ? "tag_needed"
-              : /Considering/i.test(tag)
-              ? "tag_considering"
-              : /Bad timing/i.test(tag)
-              ? "tag_bad"
-              : /Unqualified/i.test(tag)
-              ? "tag_unqualified"
-              : /Junk/i.test(tag)
-              ? "tag_junk"
-              : "tag_other";
-            return `<span class="tag_chip ${tagClass}">${tag}</span>`;
-          })
-          .join(" ");
-      }
+        let tagHtml = "-";
+        if (TagIDText?.trim()) {
+          tagHtml = TagIDText.split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+            .map((tag) => {
+              const tagClass = /Needed/i.test(tag)
+                ? "tag_needed"
+                : /Considering/i.test(tag)
+                ? "tag_considering"
+                : /Bad timing/i.test(tag)
+                ? "tag_bad"
+                : /Unqualified/i.test(tag)
+                ? "tag_unqualified"
+                : /Junk/i.test(tag)
+                ? "tag_junk"
+                : "tag_other";
+              return `<span class="tag_chip ${tagClass}">${tag}</span>`;
+            })
+            .join(" ");
+        }
+        
 
       html += `
         <tr data-id="${i}">
           <td>${date}</td>
           <td>${LeadName || "-"}</td>
-          <td>${maskEmail(Email)}</td>
-          <td><i class="fa-solid fa-phone table_phone"></i> ${maskMobile(
-            Mobile
-          )}</td>
+          <td>${Email}</td>
+          <td><i class="fa-solid fa-phone table_phone"></i> ${Mobile}</td>
           <td>${OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
           <td>${tagHtml}</td>
           <td>${CustomField13Text || "-"}</td>
@@ -4539,10 +4538,9 @@ function renderCompareTrendChart(g1, g2) {
   });
 }
 function renderDegreeTableCompare(g1, g2) {
-  const wrap = document.getElementById("degreeChartCompare"); // canvas -> div
+  const wrap = document.getElementById("degreeChartCompare");
   if (!wrap) return;
 
-  // 🔹 Lấy data thô
   const data1 = Array.isArray(g1)
     ? g1
     : Object.values(g1.byOwner || {}).flatMap((o) => o.leads || []);
@@ -4551,11 +4549,11 @@ function renderDegreeTableCompare(g1, g2) {
     : Object.values(g2.byOwner || {}).flatMap((o) => o.leads || []);
 
   if (!data1.length && !data2.length) {
-    wrap.innerHTML = "<p style='text-align:center;color:#999'>Không có dữ liệu</p>";
+    wrap.innerHTML =
+      "<p style='text-align:center;color:#999'>Không có dữ liệu</p>";
     return;
   }
 
-  // 🧩 Regex nhận diện trình độ học vấn
   const regex = {
     duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
     caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
@@ -4577,29 +4575,31 @@ function renderDegreeTableCompare(g1, g2) {
 
   const countDegrees = (data) => {
     const deg = initDegrees();
-    for (let i = 0; i < data.length; i++) {
-      const desc = (data[i].Description || "").toLowerCase();
+    const descs = data.map((d) => (d.Description ? d.Description.toLowerCase() : ""));
+    for (let i = 0; i < descs.length; i++) {
+      const desc = descs[i];
+      if (!desc.trim()) continue;
       if (regex.duoiCD.test(desc)) deg["Dưới cao đẳng"]++;
       else if (regex.caoDang.test(desc)) deg["Cao đẳng"]++;
       else if (regex.thpt.test(desc)) deg["THPT"]++;
       else if (regex.cuNhan.test(desc)) deg["Cử nhân"]++;
       else if (regex.sinhVien.test(desc)) deg["Sinh viên"]++;
       else if (regex.thacSi.test(desc)) deg["Thạc sĩ"]++;
-      else if (desc.trim() !== "") deg["Khác"]++;
+      else deg["Khác"]++;
     }
     return deg;
   };
 
-  const deg1 = countDegrees(data1);
-  const deg2 = countDegrees(data2);
+  const degPrev = countDegrees(data1); // kỳ 1
+  const degCurr = countDegrees(data2); // kỳ 2
 
-  const labels = Object.keys(deg1);
+  const labels = Object.keys(degPrev);
 
   const rows = labels
     .map((label) => {
-      const v1 = deg1[label];
-      const v2 = deg2[label];
-      const diff = v2 - v1;
+      const prev = degPrev[label] || 0;
+      const curr = degCurr[label] || 0;
+      const diff = prev - curr; // 🔁 đảo chiều: kỳ 1 - kỳ 2
       const trendClass = diff > 0 ? "up" : diff < 0 ? "down" : "";
       const arrow =
         diff > 0
@@ -4611,9 +4611,9 @@ function renderDegreeTableCompare(g1, g2) {
       return `
         <tr class="${trendClass}">
           <td>${label}</td>
-          <td>${v1}</td>
-          <td>${v2}</td>
-          <td>${arrow}</td>
+          <td style="text-align:center">${prev}</td>
+          <td style="text-align:center">${curr}</td>
+          <td style="text-align:center">${arrow}</td>
         </tr>
       `;
     })
@@ -4624,8 +4624,8 @@ function renderDegreeTableCompare(g1, g2) {
       <thead>
         <tr>
           <th>Trình độ</th>
-          <th>Kỳ 1</th>
-          <th>Kỳ 2</th>
+          <th>Range 1</th>
+          <th>Range 2</th>
           <th>Biến động</th>
         </tr>
       </thead>
@@ -4633,7 +4633,6 @@ function renderDegreeTableCompare(g1, g2) {
     </table>
   `;
 }
-
 
 function renderProgramChartCompare(g1, g2) {
   const ctx = document.getElementById("programChartCompare");
