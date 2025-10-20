@@ -2980,6 +2980,7 @@ function maskMobile(mobile) {
 function renderLeadTable(leads) {
   const container = document.querySelector(".dom_table_box");
   if (!container) return;
+
   if (!Array.isArray(leads) || leads.length === 0) {
     container.innerHTML = `<div class="dom_table_container empty"><p>No data</p></div>`;
     return;
@@ -2997,6 +2998,7 @@ function renderLeadTable(leads) {
     "Organization",
     "Description",
   ];
+
   container.innerHTML = `
     <div class="dom_table_container scrollable">
       <table id="main_table">
@@ -3004,9 +3006,10 @@ function renderLeadTable(leads) {
           .map((h) => `<th class="sortable">${h}</th>`)
           .join("")}</tr></thead>
         <tbody></tbody>
-        <tfoot><tr><td colspan="3">View <span class="loaded_count">0</span> / ${leads.length.toLocaleString()} leads</td><td colspan="${
-    headers.length - 3
-  }"></td></tr></tfoot>
+        <tfoot><tr>
+          <td colspan="3">View <span class="loaded_count">0</span> / ${leads.length.toLocaleString()} leads</td>
+          <td colspan="${headers.length - 3}"></td>
+        </tr></tfoot>
       </table>
     </div>`;
 
@@ -3021,56 +3024,71 @@ function renderLeadTable(leads) {
   const INITIAL_CHUNK = 20,
     SCROLL_CHUNK = 20;
 
+  // 🔹 Helper: format date
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("vi-VN") : "-");
+
+  // 🔹 Helper: chỉ hiển thị 6 số cuối
+  const maskPhone = (phone = "") => {
+    const clean = String(phone).replace(/\D/g, "");
+    if (clean.length <= 6) return clean;
+    return "••••" + clean.slice(-6);
+  };
+
+  // 🔹 Helper: format tag list
+  const fmtTags = (tagText = "") => {
+    if (!tagText.trim()) return "-";
+    return tagText
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((tag) => {
+        const cls = /Needed/i.test(tag)
+          ? "tag_needed"
+          : /Considering/i.test(tag)
+          ? "tag_considering"
+          : /Bad timing/i.test(tag)
+          ? "tag_bad"
+          : /Unqualified/i.test(tag)
+          ? "tag_unqualified"
+          : /Junk/i.test(tag)
+          ? "tag_junk"
+          : "tag_other";
+        return `<span class="tag_chip ${cls}">${tag}</span>`;
+      })
+      .join(" ");
+  };
+
+  // 🔹 Sort theo ngày (mặc định mới nhất trước)
   leads.sort(
     (a, b) =>
       (sortAsc ? 1 : -1) *
       (new Date(a.CreatedDate || 0) - new Date(b.CreatedDate || 0))
   );
 
+  // 🔹 Render từng phần
   function renderChunk(count) {
     const end = Math.min(index + count, leads.length);
     let html = "";
+
     for (let i = index; i < end; i++) {
       const l = leads[i];
-      const date = l.CreatedDate
-        ? new Date(l.CreatedDate).toLocaleDateString("vi-VN")
-        : "-";
-      let tagHtml = "-";
-      if (l.TagIDText?.trim()) {
-        tagHtml = l.TagIDText.split(",")
-          .map((t) => t.trim())
-          .filter(Boolean)
-          .map((tag) => {
-            const cls = /Needed/i.test(tag)
-              ? "tag_needed"
-              : /Considering/i.test(tag)
-              ? "tag_considering"
-              : /Bad timing/i.test(tag)
-              ? "tag_bad"
-              : /Unqualified/i.test(tag)
-              ? "tag_unqualified"
-              : /Junk/i.test(tag)
-              ? "tag_junk"
-              : "tag_other";
-            return `<span class="tag_chip ${cls}">${tag}</span>`;
-          })
-          .join(" ");
-      }
-      html += `<tr data-id="${i}">
-        <td>${date}</td>
-        <td>${l.LeadName || "-"}</td>
-        <td><i class="fa-solid fa-phone table_phone"></i> ${
-          l.Mobile || "-"
-        }</td>
-        <td>${l.OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
-        <td>${tagHtml}</td>
-        <td>${l.CustomField13Text || "-"}</td>
-        <td>${l.CustomField14Text || "-"}</td>
-        <td>${l.CustomField15Text || "-"}</td>
-        <td>${l.CustomField16Text || "-"}</td>
-        <td>${l.Description || "-"}</td>
-      </tr>`;
+      html += `
+        <tr data-id="${i}">
+          <td>${fmtDate(l.CreatedDate)}</td>
+          <td>${l.LeadName || "-"}</td>
+          <td><i class="fa-solid fa-phone table_phone"></i> ${maskPhone(
+            l.Mobile
+          )}</td>
+          <td>${l.OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
+          <td>${fmtTags(l.TagIDText || "")}</td>
+          <td>${l.CustomField13Text || "-"}</td>
+          <td>${l.CustomField14Text || "-"}</td>
+          <td>${l.CustomField15Text || "-"}</td>
+          <td>${l.CustomField16Text || "-"}</td>
+          <td>${l.Description || "-"}</td>
+        </tr>`;
     }
+
     tbody.insertAdjacentHTML("beforeend", html);
     index = end;
     loadedCountEl.textContent = index.toLocaleString("en-US");
@@ -3085,8 +3103,10 @@ function renderLeadTable(leads) {
     wrapper.scrollTop = 0;
   }
 
+  // 🔹 Initial render
   renderChunk(INITIAL_CHUNK);
 
+  // 🔹 Lazy load khi scroll
   wrapper.addEventListener(
     "scroll",
     () => {
@@ -3103,6 +3123,7 @@ function renderLeadTable(leads) {
     { passive: true }
   );
 
+  // 🔹 Sort toggle khi click header
   thList.forEach((th) => {
     if (th.textContent === "Created Date") {
       th.classList.add("clickable");
