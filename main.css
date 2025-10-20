@@ -2330,3 +2330,6 @@ tbody {
   opacity: 1;
   transform: translateX(0);
 }
+#main_table td:nth-child(4) {
+  width: 15rem
+}
