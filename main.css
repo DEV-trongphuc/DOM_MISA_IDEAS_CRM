@@ -652,9 +652,8 @@ table tfoot {
   text-align: center;
 }
 #main_table td:nth-child(2),
-#main_table td:nth-child(6),
 #main_table td:nth-child(5),
-#main_table td:nth-child(8) {
+#main_table td:nth-child(7) {
   width: 20rem;
 }
 #main_table td:nth-child(10) {
@@ -1839,7 +1838,8 @@ tbody {
 #access_token {
   font-size: 2rem;
   font-weight: bold;
-  color: var(--mainClr);
+  letter-spacing: 0.5rem;
+  color: #333333d3;
 }
 .report_time {
   font-size: 1.6rem;
@@ -2330,6 +2330,7 @@ tbody {
   opacity: 1;
   transform: translateX(0);
 }
-#main_table td:nth-child(4) {
+#main_table td:nth-child(4) ,
+#main_table td:nth-child(3) {
   width: 15rem
 }
