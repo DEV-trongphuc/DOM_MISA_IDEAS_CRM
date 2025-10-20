@@ -3089,7 +3089,6 @@ function renderLeadTable(leads) {
   const headers = [
     "Created Date",
     "Lead Name",
-    "Email",
     "Mobile",
     "Owner",
     "Tags",
@@ -3150,7 +3149,6 @@ function renderLeadTable(leads) {
       const {
         CreatedDate,
         LeadName,
-        Email,
         Mobile,
         OwnerIDText,
         TagIDText,
@@ -3192,7 +3190,6 @@ function renderLeadTable(leads) {
         <tr data-id="${i}">
           <td>${date}</td>
           <td>${LeadName || "-"}</td>
-          <td>${Email}</td>
           <td><i class="fa-solid fa-phone table_phone"></i> ${Mobile}</td>
           <td>${OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
           <td>${tagHtml}</td>
