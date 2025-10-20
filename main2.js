@@ -3943,14 +3943,11 @@ function setupCompareDropdowns() {
 // =======================
 async function loadCompareData(range1, range2) {
   const compareWrap = document.querySelector(".dom_compare");
-  const loading = document.querySelector(".loading");
   if (!compareWrap) return alert("⚠️ Không tìm thấy vùng compare!");
 
   const currentAccount =
     localStorage.getItem("selectedAccount") || "Total Data";
   console.log("📊 Loading compare data for:", currentAccount);
-
-  loading.classList.add("active"); // 🌀 Hiện overlay loading
 
   try {
     // 🧩 Fetch song song
@@ -4054,10 +4051,12 @@ document.addEventListener("click", async (e) => {
 
   const range1 = getDateRange("last_7days");
   const range2 = getDateRange("previous_7days");
+  const loading = document.querySelector(".loading");
 
+  loading.classList.add("active"); // 🌀 Hiện overlay loading
   updateCompareDateUI(range1, range2);
   await loadCompareData(range1, range2);
-
+  loading.classList.remove("active"); // 🌀 Hiện overlay loading
   compareLoaded = true;
 });
 
