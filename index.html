@@ -745,9 +745,36 @@
             </div>
           </div>
           <div class="dom_row flex">
+            <div class="dom_inner w33 box_shadow chart">
+              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
+              <div class="chart-wrapper">
+                <canvas id="leadTagChartCompare"></canvas>
+              </div>
+            </div>
+            <div class="dom_inner w33 box_shadow chart">
+              <h2>
+                <i class="fa-solid fa-tags main_clr"></i> Educational Note
+              </h2>
+              <div class="chart-wrapper">
+                <div
+                  id="degreeChartCompare"
+                ></div>
+              </div>
+            </div>
+            <div class="dom_inner w33 box_shadow chart">
+              <h2><i class="fa-solid fa-tags main_clr"></i> Program Tag</h2>
+              <div class="chart-wrapper">
+                <canvas
+                  id="programChartCompare"
+                
+                ></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="dom_row flex">
             <div class="dom_inner w50 box_shadow chart bgw">
               <h2>
-                <i class="fa-solid fa-user main_clr"></i> Saleperson Leads
+                <i class="fa-solid fa-user main_clr"></i> Saleperson Total Leads
               </h2>
               <div class="chart-wrapper">
                 <canvas id="leadSaleCompare"></canvas>
@@ -757,8 +784,8 @@
             <div class="dom_inner w50 box_shadow chart bgw">
               <div class="dom_table_filter">
                 <h2>
-                  <i class="fa-solid fa-chart-column main_clr"></i> Quality
-                  Saleperson
+                  <i class="fa-solid fa-chart-column main_clr"></i> 
+                  Saleperson Quality Tags
                 </h2>
                 <div class="dom_select sale_tag_chart_compare">
                   <div class="flex">
@@ -789,33 +816,7 @@
               </div>
             </div>
           </div>
-          <div class="dom_row flex">
-            <div class="dom_inner w33 box_shadow chart">
-              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
-              <div class="chart-wrapper">
-                <canvas id="leadTagChartCompare"></canvas>
-              </div>
-            </div>
-            <div class="dom_inner w33 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-tags main_clr"></i> Educational Note
-              </h2>
-              <div class="chart-wrapper">
-                <div
-                  id="degreeChartCompare"
-                ></div>
-              </div>
-            </div>
-            <div class="dom_inner w33 box_shadow chart">
-              <h2><i class="fa-solid fa-tags main_clr"></i> Program Tag</h2>
-              <div class="chart-wrapper">
-                <canvas
-                  id="programChartCompare"
-                
-                ></canvas>
-              </div>
-            </div>
-          </div>
+      
         </div>
         <div class="dom_ai_report">
           <i class="fa-solid fa-xmark dom_ai_report_close"></i>
