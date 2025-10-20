@@ -358,6 +358,7 @@ html {
 .compare .dom_toplist {
   height: max-content;
   max-height: unset;
+  padding-bottom: 2rem;
 
 }
 .compare .dom_toplist > li {
@@ -2209,6 +2210,10 @@ tbody {
   color: white;
   font-weight: bold;
   box-shadow: 0 0 5px rgb(0, 0, 0, 0.2);
+  transition: 0.3s;
+}
+#compare_btn:hover {
+  background-color: var(--mainClr);
 }
 /* .pct {
   display: flex;
@@ -2257,6 +2262,7 @@ tbody {
   height: auto;
   overflow-y: visible;
   max-height: 36.5rem;
+
 }
 .mini_table {
   width: 100%;
@@ -2308,3 +2314,4 @@ tbody {
 .mini_table tbody td {
   padding: 1rem 0;
 }
+/* Thêm vào thẻ <style> của bạn */
