@@ -3051,7 +3051,7 @@ function maskEmail(email) {
   const [user, domain] = email.split("@");
   if (!domain) return email;
   const visible = user.slice(0, 3);
-  return `${visible}...@${domain}`;
+  return `${visible}......@${domain}`;
 }
 
 function maskMobile(mobile) {
@@ -4149,35 +4149,15 @@ async function loadCompareData(range1, range2) {
 let compareLoaded = false;
 let lastCompareAccount = null;
 
-document.addEventListener("click", async (e) => {
-  const compareMenu = e.target.closest('[data-view="compare"]');
-  if (!compareMenu) return;
-
-  const currentAccount =
-    localStorage.getItem("selectedAccount") || "Total Data";
-
-  // 🔁 Nếu account đổi → ép load lại
-  if (currentAccount !== lastCompareAccount) {
-    compareLoaded = false;
-    lastCompareAccount = currentAccount;
-  }
-
-  // ⚙️ Nếu đã load và cùng account → bỏ qua
-  if (compareLoaded) return;
-
-  // 🕒 Mặc định: last_7days vs previous_7days
-  const range1 = getDateRange("last_7days");
-  const range2 = getDateRange("previous_7days");
-
+// 🧠 Hàm dùng chung để update giao diện ngày + nút
+function updateCompareDateUI(range1, range2) {
   const fmtDate = (str) => {
     const d = new Date(str);
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    return `${dd}/${mm}/${yyyy}`;
+    return `${String(d.getDate()).padStart(2, "0")}/${String(
+      d.getMonth() + 1
+    ).padStart(2, "0")}/${d.getFullYear()}`;
   };
 
-  // 🗓️ Hiển thị ra UI
   const dateText = document.getElementById("compare_date");
   if (dateText) {
     dateText.innerHTML = `
@@ -4190,7 +4170,6 @@ document.addEventListener("click", async (e) => {
     `;
   }
 
-  // 🆕 Cập nhật hai nút range
   const btnR1 = document.querySelector(".btn-source.rang1");
   const btnR2 = document.querySelector(".btn-source.rang2");
   if (btnR1)
@@ -4201,12 +4180,65 @@ document.addEventListener("click", async (e) => {
     btnR2.innerHTML = `<i class="fa-solid fa-circle"></i> ${fmtDate(
       range2.from
     )} → ${fmtDate(range2.to)}`;
+}
 
-  // 📊 Load compare
+// ============================
+// 📍 Khi mở tab Compare
+// ============================
+document.addEventListener("click", async (e) => {
+  const compareMenu = e.target.closest('[data-view="compare"]');
+  if (!compareMenu) return;
+
+  const currentAccount =
+    localStorage.getItem("selectedAccount") || "Total Data";
+
+  // 🔁 Nếu account đổi thì reset
+  if (currentAccount !== lastCompareAccount) {
+    compareLoaded = false;
+    lastCompareAccount = currentAccount;
+  }
+
+  // ⚙️ Nếu đã load cho account này thì bỏ qua
+  if (compareLoaded) return;
+
+  const range1 = getDateRange("last_7days");
+  const range2 = getDateRange("previous_7days");
+
+  updateCompareDateUI(range1, range2);
   await loadCompareData(range1, range2);
 
-  // ✅ Đánh dấu là đã load cho account này
   compareLoaded = true;
+});
+
+// ============================
+// 📍 Khi bấm nút Compare
+// ============================
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#compare_btn");
+  if (!btn) return;
+
+  const range1 =
+    compareState.range1 === "custom" && compareState.custom1
+      ? compareState.custom1
+      : getDateRange(compareState.range1);
+
+  const range2 =
+    compareState.range2 === "custom" && compareState.custom2
+      ? compareState.custom2
+      : getDateRange(compareState.range2);
+
+  // 🔒 Giới hạn ngày
+  const limitDate = new Date("2025-10-01");
+  if (
+    new Date(range1.to) < limitDate ||
+    new Date(range2.to) < limitDate
+  ) {
+    alert("⚠️ Ngày phải sau 01/10/2025!");
+    return;
+  }
+
+  updateCompareDateUI(range1, range2);
+  await loadCompareData(range1, range2);
 });
 
 // document.addEventListener("click", async (e) => {
@@ -4254,62 +4286,6 @@ document.addEventListener("click", async (e) => {
 // =======================
 // 📍 Khi click nút “Compare” (manual refresh)
 // =======================
-document.addEventListener("click", async (e) => {
-  const btn = e.target.closest("#compare_btn");
-  if (!btn) return;
-
-  const range1 =
-    compareState.range1 === "custom" && compareState.custom1
-      ? compareState.custom1
-      : getDateRange(compareState.range1);
-
-  const range2 =
-    compareState.range2 === "custom" && compareState.custom2
-      ? compareState.custom2
-      : getDateRange(compareState.range2);
-
-  // 🔹 Giới hạn ngày tối thiểu (phải sau 01/10/2025)
-  const limitDate = new Date("2025-10-01");
-  const to1 = new Date(range1.to);
-  const to2 = new Date(range2.to);
-
-  if (to1 < limitDate || to2 < limitDate) {
-    alert("⚠️ Ngày phải sau 01/10/2025!");
-    return; // Dừng lại, không load data
-  }
-
-  // 🧾 Format ngày dạng dd/mm/yyyy
-  const fmtDate = (str) => {
-    const d = new Date(str);
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    return `${dd}/${mm}/${yyyy}`;
-  };
-
-  // 🗓️ Hiển thị ra UI
-  const dateText = document.getElementById("compare_date");
-  if (dateText) {
-    dateText.innerHTML = `
-      <span><b><i class="fa-solid fa-circle"></i> Range 1:</b> ${fmtDate(
-        range1.from
-      )} → ${fmtDate(range1.to)}</span>
-      <span> <b><i class="fa-solid fa-circle"></i> Range 2:</b> ${fmtDate(
-        range2.from
-      )} → ${fmtDate(range2.to)}</span>
-     
-    `;
-  }
-  const btnR1 = document.querySelector(".btn-source.rang1");
-  const btnR2 = document.querySelector(".btn-source.rang2");
-  if (btnR1)
-    btnR1.innerHTML = `${fmtDate(range1.from)} → ${fmtDate(range1.to)}`;
-  if (btnR2)
-    btnR2.innerHTML = `${fmtDate(range2.from)} → ${fmtDate(range2.to)}`;
-
-  // ✅ Nếu hợp lệ thì tiếp tục load dữ liệu
-  await loadCompareData(range1, range2);
-});
 
 // 🔹 Tổng hợp dữ liệu cơ bản
 function summarizeCompareData(data, grouped) {
@@ -4338,14 +4314,14 @@ function renderCompareBoxes(compareWrap, s1, s2) {
 
   // 🧩 Chuẩn hoá dữ liệu
   const normalize = (obj) => ({
-    name: obj?.name || "Unknown", // giữ tên nếu có
+    name: obj?.name || "Unknown",
     total: obj?.total ?? 0,
     qualifiedPct: obj?.qualifiedPct ?? 0,
     needed: obj?.needed ?? 0,
     considering: obj?.considering ?? 0,
   });
 
-  // 📊 Tính chênh lệch
+  // 📊 Hàm tính chênh lệch
   const diffValue = (curr, prev) => {
     const delta = curr - prev;
     const pct = prev === 0 ? 0 : ((delta / prev) * 100).toFixed(1);
@@ -4353,7 +4329,7 @@ function renderCompareBoxes(compareWrap, s1, s2) {
     return { pct, sign, delta };
   };
 
-  // 🎨 Render chỉ số
+  // 🎨 Hàm render 1 chỉ số
   const renderField = (el, value, compare, isPercent = false) => {
     if (!el) return;
     const { pct, sign } = compare;
@@ -4373,7 +4349,7 @@ function renderCompareBoxes(compareWrap, s1, s2) {
   };
 
   // 🧩 Render 1 box
-  const renderOne = (box, current, previous, inactive = false) => {
+  const renderOne = (box, current, previous, isReversed = false, inactive = false) => {
     const title = box.querySelector(".chart_title") || box.querySelector("h3");
     const c1 = box.querySelector("ul li:nth-of-type(1) p");
     const c2 = box.querySelector("ul li:nth-of-type(2) p");
@@ -4384,14 +4360,33 @@ function renderCompareBoxes(compareWrap, s1, s2) {
     const ref = normalize(previous);
 
     if (title) title.textContent = data.name;
-
     if (inactive) box.classList.add("inactive");
     else box.classList.remove("inactive");
 
     c1.innerHTML = `<span class="val">${data.total.toLocaleString()}</span>`;
-    renderField(c2, data.qualifiedPct, diffValue(data.qualifiedPct, ref.qualifiedPct), true);
-    renderField(c3, data.needed, diffValue(data.needed, ref.needed));
-    renderField(c4, data.considering, diffValue(data.considering, ref.considering));
+
+    // 🌀 Nếu là box bên phải → đảo dấu ngược lại
+    const factor = isReversed ? -1 : 1;
+
+    renderField(
+      c2,
+      data.qualifiedPct,
+      reverseDiff(diffValue(data.qualifiedPct, ref.qualifiedPct), factor),
+      true
+    );
+    renderField(c3, data.needed, reverseDiff(diffValue(data.needed, ref.needed), factor));
+    renderField(
+      c4,
+      data.considering,
+      reverseDiff(diffValue(data.considering, ref.considering), factor)
+    );
+  };
+
+  // 🔄 Đảo chiều tăng/giảm
+  const reverseDiff = (d, factor) => {
+    if (factor === 1) return d; // giữ nguyên
+    const reversedSign = d.sign === "up" ? "down" : d.sign === "down" ? "up" : "equal";
+    return { pct: d.pct, sign: reversedSign, delta: -d.delta };
   };
 
   // 💡 Trường hợp 1 bên không có → clone name và layout bên kia
@@ -4425,12 +4420,12 @@ function renderCompareBoxes(compareWrap, s1, s2) {
   let d1 = s1 ? normalize(s1) : null;
   let d2 = s2 ? normalize(s2) : null;
 
-  // Nếu 1 bên không có, copy name từ bên còn lại
   if (!d1 && d2) d1 = cloneFromOther(d2);
   if (!d2 && d1) d2 = cloneFromOther(d1);
 
-  renderOne(boxes[0], d1, d2, !s1);
-  renderOne(boxes[1], d2, d2, !s2);
+  // 🔄 Bên trái bình thường, bên phải đảo chiều
+  renderOne(boxes[0], d1, d2, false, !s1);
+  renderOne(boxes[1], d2, d1, !s2); // đảo chiều nè!
   highlightBox(boxes[0], boxes[1], d1, d2);
 }
 
@@ -5256,6 +5251,7 @@ function generateAdvancedCompareReport() {
         <div class="ai_report_inner">${vtciHTML}</div>
       </div>`;
   } else {
+
     // 🧩 Total Data → render cả 2 khối
     const ideasHTML = makeDeepCompareReport(
       ideas.grouped1,
@@ -5271,6 +5267,7 @@ function generateAdvancedCompareReport() {
       vtci.data2,
       "VTCI"
     );
+
     html = `
       <div class="ai_report_block ideas">
         <h4><img src="https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp"/>IDEAS – So sánh 2 kỳ</h4>
