@@ -3977,46 +3977,30 @@ function renderSaleDropdown() {
   });
 }
 
-document.addEventListener("click", async (e) => {
-  const btn = e.target.closest(".btn_download_pdf");
-  if (!btn) return;
+// document.addEventListener("click", (e) => {
+//   const btn = e.target.closest(".btn_download_pdf");
+//   if (!btn) return;
+//   triggerPrintReport();
+// });
 
-  const report = document.querySelector(".dom_ai_report");
-  if (!report) return alert("⚠️ Không tìm thấy báo cáo!");
+// function triggerPrintReport() {
+//   const report = document.querySelector(".dom_ai_report");
+//   if (!report) return alert("⚠️ Không tìm thấy báo cáo!");
 
-  // 🖼️ Chụp lại vùng report
-  const canvas = await html2canvas(report, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: "#ffffff",
-    scrollY: -window.scrollY,
-  });
+//   // 🧩 1️⃣ Thêm class CSS trước khi in
+//   report.classList.add("printing");
 
-  // 🧾 Tạo PDF
-  const imgData = canvas.toDataURL("image/png");
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF("p", "mm", "a4");
+//   // 🕓 2️⃣ Đợi CSS apply rồi gọi print
+//   setTimeout(() => {
+//     window.print();
 
-  const pdfWidth = 210;
-  const pageHeight = 297;
-  const imgWidth = pdfWidth;
-  const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-  let heightLeft = imgHeight;
-  let position = 0;
-
-  while (heightLeft > 0) {
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-    if (heightLeft > 0) {
-      position -= pageHeight;
-      pdf.addPage();
-    }
-  }
-
-  const fileName = `DOM_Report_${new Date().toISOString().split("T")[0]}.pdf`;
-  pdf.save(fileName);
-});
+//     // 🧼 3️⃣ Sau khi in xong, gỡ class
+//     // (browser không có event “print done”, nên dùng delay nhỏ)
+//     setTimeout(() => {
+//       report.classList.remove("printing");
+//     }, 1000);
+//   }, 300);
+// }
 
 function setupCompareDropdowns() {
   const compareSelects = document.querySelectorAll(".dom_select.compare");
