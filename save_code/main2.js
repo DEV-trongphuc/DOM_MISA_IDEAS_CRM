@@ -219,7 +219,7 @@ async function fetchLeadData(from, to, token) {
 async function fetchLeads(from, to) {
   let data = null;
   let token = null;
-
+  document.querySelector(".loading")?.classList.add("active");
   try {
     // 🔹 1️⃣ Nếu đã login 1 lần rồi, chỉ dùng lại token cũ
     if (MISA_TOKEN_READY) {
@@ -302,7 +302,7 @@ async function fetchLeads(from, to) {
     console.error("🚨 Lỗi fetchLeads:", err);
     alert("Không thể kết nối đến IDEAS CRM!");
   }
-
+  document.querySelector(".loading")?.classList.remove("active");
   return data || [];
 }
 
