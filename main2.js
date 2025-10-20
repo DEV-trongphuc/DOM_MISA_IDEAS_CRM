@@ -4120,7 +4120,7 @@ async function loadCompareData(range1, range2) {
     // 🖼️ Render toàn bộ giao diện Compare
     renderCompareBoxes(compareWrap, summary1, summary2);
     renderCompareTrendChart(g1, g2);
-    renderDegreeChartCompare(g1, g2);
+    renderDegreeTableCompare(g1, g2);
     renderProgramChartCompare(g1, g2);
     renderLeadSaleCompare(g1, g2);
     renderLeadTagChartCompare(g1, g2);
@@ -4146,13 +4146,23 @@ async function loadCompareData(range1, range2) {
 // =======================
 // 📍 Khi click menu “Compare”
 // =======================
-let compareLoaded = false; // ⚡ Cờ kiểm tra đã load chưa
+let compareLoaded = false;
+let lastCompareAccount = null;
 
 document.addEventListener("click", async (e) => {
   const compareMenu = e.target.closest('[data-view="compare"]');
   if (!compareMenu) return;
 
-  // ⚙️ Nếu đã load rồi thì bỏ qua
+  const currentAccount =
+    localStorage.getItem("selectedAccount") || "Total Data";
+
+  // 🔁 Nếu account đổi → ép load lại
+  if (currentAccount !== lastCompareAccount) {
+    compareLoaded = false;
+    lastCompareAccount = currentAccount;
+  }
+
+  // ⚙️ Nếu đã load và cùng account → bỏ qua
   if (compareLoaded) return;
 
   // 🕒 Mặc định: last_7days vs previous_7days
@@ -4180,7 +4190,7 @@ document.addEventListener("click", async (e) => {
     `;
   }
 
-  // 🆕 Thêm vào hai nút "Source Data Rang 1" & "Source Data Rang 2"
+  // 🆕 Cập nhật hai nút range
   const btnR1 = document.querySelector(".btn-source.rang1");
   const btnR2 = document.querySelector(".btn-source.rang2");
   if (btnR1)
@@ -4192,10 +4202,10 @@ document.addEventListener("click", async (e) => {
       range2.from
     )} → ${fmtDate(range2.to)}`;
 
-  // 📊 Load dữ liệu compare
+  // 📊 Load compare
   await loadCompareData(range1, range2);
 
-  // ✅ Đánh dấu là đã load
+  // ✅ Đánh dấu là đã load cho account này
   compareLoaded = true;
 });
 
@@ -4326,7 +4336,16 @@ function renderCompareBoxes(compareWrap, s1, s2) {
   const boxes = compareWrap.querySelectorAll(".dom_inner.w25.box_shadow.chart");
   if (boxes.length < 2) return;
 
-  // 📊 Hàm tính chênh lệch dựa theo kỳ trước (s2)
+  // 🧩 Chuẩn hoá dữ liệu
+  const normalize = (obj) => ({
+    name: obj?.name || "Unknown", // giữ tên nếu có
+    total: obj?.total ?? 0,
+    qualifiedPct: obj?.qualifiedPct ?? 0,
+    needed: obj?.needed ?? 0,
+    considering: obj?.considering ?? 0,
+  });
+
+  // 📊 Tính chênh lệch
   const diffValue = (curr, prev) => {
     const delta = curr - prev;
     const pct = prev === 0 ? 0 : ((delta / prev) * 100).toFixed(1);
@@ -4334,7 +4353,7 @@ function renderCompareBoxes(compareWrap, s1, s2) {
     return { pct, sign, delta };
   };
 
-  // 🎨 Render field
+  // 🎨 Render chỉ số
   const renderField = (el, value, compare, isPercent = false) => {
     if (!el) return;
     const { pct, sign } = compare;
@@ -4345,7 +4364,6 @@ function renderCompareBoxes(compareWrap, s1, s2) {
         : sign === "down"
         ? `<i class="fa-solid fa-caret-down"></i>`
         : "";
-
     el.innerHTML = `
       <span class="val">${valText}</span>
       <span class="pct ${sign}">
@@ -4354,33 +4372,68 @@ function renderCompareBoxes(compareWrap, s1, s2) {
     `;
   };
 
-  // 🧩 Render cho từng box
-  const renderOne = (box, current, previous) => {
-    const c1 = box.querySelector("ul li:nth-of-type(1) p"); // Total
-    const c2 = box.querySelector("ul li:nth-of-type(2) p"); // Qualified%
-    const c3 = box.querySelector("ul li:nth-of-type(3) p"); // Needed
-    const c4 = box.querySelector("ul li:nth-of-type(4) p"); // Considering
+  // 🧩 Render 1 box
+  const renderOne = (box, current, previous, inactive = false) => {
+    const title = box.querySelector(".chart_title") || box.querySelector("h3");
+    const c1 = box.querySelector("ul li:nth-of-type(1) p");
+    const c2 = box.querySelector("ul li:nth-of-type(2) p");
+    const c3 = box.querySelector("ul li:nth-of-type(3) p");
+    const c4 = box.querySelector("ul li:nth-of-type(4) p");
 
-    if (c1)
-      c1.innerHTML = `<span class="val">${current.total.toLocaleString()}</span>`;
-    renderField(
-      c2,
-      current.qualifiedPct,
-      diffValue(current.qualifiedPct, previous.qualifiedPct),
-      true
-    );
-    renderField(c3, current.needed, diffValue(current.needed, previous.needed));
-    renderField(
-      c4,
-      current.considering,
-      diffValue(current.considering, previous.considering)
-    );
+    const data = normalize(current);
+    const ref = normalize(previous);
+
+    if (title) title.textContent = data.name;
+
+    if (inactive) box.classList.add("inactive");
+    else box.classList.remove("inactive");
+
+    c1.innerHTML = `<span class="val">${data.total.toLocaleString()}</span>`;
+    renderField(c2, data.qualifiedPct, diffValue(data.qualifiedPct, ref.qualifiedPct), true);
+    renderField(c3, data.needed, diffValue(data.needed, ref.needed));
+    renderField(c4, data.considering, diffValue(data.considering, ref.considering));
   };
 
-  // ✅ Cả 2 box đều tính % dựa theo cùng chuẩn (s2 = kỳ trước)
-  renderOne(boxes[0], s1, s2); // hiện tại
-  renderOne(boxes[1], s2, s2); // kỳ trước, nhưng % cũng so với kỳ trước
+  // 💡 Trường hợp 1 bên không có → clone name và layout bên kia
+  const cloneFromOther = (source) => ({
+    name: source?.name || "Unknown",
+    total: 0,
+    qualifiedPct: 0,
+    needed: 0,
+    considering: 0,
+  });
+
+  // 🧠 Tô màu tổng thể
+  const highlightBox = (box1, box2, s1, s2) => {
+    box1.classList.remove("up", "down", "equal");
+    box2.classList.remove("up", "down", "equal");
+    const a = s1?.total ?? 0;
+    const b = s2?.total ?? 0;
+    if (a > b) {
+      box1.classList.add("up");
+      box2.classList.add("down");
+    } else if (a < b) {
+      box1.classList.add("down");
+      box2.classList.add("up");
+    } else {
+      box1.classList.add("equal");
+      box2.classList.add("equal");
+    }
+  };
+
+  // 🧩 Chuẩn bị dữ liệu hai bên
+  let d1 = s1 ? normalize(s1) : null;
+  let d2 = s2 ? normalize(s2) : null;
+
+  // Nếu 1 bên không có, copy name từ bên còn lại
+  if (!d1 && d2) d1 = cloneFromOther(d2);
+  if (!d2 && d1) d2 = cloneFromOther(d1);
+
+  renderOne(boxes[0], d1, d2, !s1);
+  renderOne(boxes[1], d2, d2, !s2);
+  highlightBox(boxes[0], boxes[1], d1, d2);
 }
+
 
 // 🔹 Vẽ trend chart so sánh 2 giai đoạn
 function renderCompareTrendChart(g1, g2) {
@@ -4469,11 +4522,11 @@ function renderCompareTrendChart(g1, g2) {
     },
   });
 }
-function renderDegreeChartCompare(g1, g2) {
-  const ctx = document.getElementById("degreeChartCompare");
-  if (!ctx) return;
+function renderDegreeTableCompare(g1, g2) {
+  const wrap = document.getElementById("degreeChartCompare"); // canvas -> div
+  if (!wrap) return;
 
-  // 🔹 Flatten data
+  // 🔹 Lấy data thô
   const data1 = Array.isArray(g1)
     ? g1
     : Object.values(g1.byOwner || {}).flatMap((o) => o.leads || []);
@@ -4481,7 +4534,10 @@ function renderDegreeChartCompare(g1, g2) {
     ? g2
     : Object.values(g2.byOwner || {}).flatMap((o) => o.leads || []);
 
-  if (!data1.length && !data2.length) return;
+  if (!data1.length && !data2.length) {
+    wrap.innerHTML = "<p style='text-align:center;color:#999'>Không có dữ liệu</p>";
+    return;
+  }
 
   // 🧩 Regex nhận diện trình độ học vấn
   const regex = {
@@ -4522,94 +4578,47 @@ function renderDegreeChartCompare(g1, g2) {
   const deg2 = countDegrees(data2);
 
   const labels = Object.keys(deg1);
-  const values1 = Object.values(deg1);
-  const values2 = Object.values(deg2);
 
-  // 🔄 Clear chart cũ
-  if (window.degreeChartCompareInstance)
-    window.degreeChartCompareInstance.destroy();
+  const rows = labels
+    .map((label) => {
+      const v1 = deg1[label];
+      const v2 = deg2[label];
+      const diff = v2 - v1;
+      const trendClass = diff > 0 ? "up" : diff < 0 ? "down" : "";
+      const arrow =
+        diff > 0
+          ? `<i class="fa-solid fa-caret-up"></i> <span class="up">+${diff}</span>`
+          : diff < 0
+          ? `<i class="fa-solid fa-caret-down"></i> <span class="down">${diff}</span>`
+          : "-";
 
-  // 🎨 Màu
-  const color1 = "rgba(255, 171, 0, 0.9)";
-  const color2 = "rgba(38,42,83, 0.9)";
+      return `
+        <tr class="${trendClass}">
+          <td>${label}</td>
+          <td>${v1}</td>
+          <td>${v2}</td>
+          <td>${arrow}</td>
+        </tr>
+      `;
+    })
+    .join("");
 
-  // 🚀 Chart mới
-  window.degreeChartCompareInstance = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "",
-          data: values1,
-          backgroundColor: color1,
-          borderSkipped: "bottom", // ✅ chỉ bo góc trên
-          borderRadius: {
-            topLeft: 6,
-            topRight: 6,
-            bottomLeft: 0,
-            bottomRight: 0,
-          },
-        },
-        {
-          label: "",
-          data: values2,
-          backgroundColor: color2,
-          borderSkipped: "bottom", // ✅ chỉ bo góc trên
-          borderRadius: {
-            topLeft: 6,
-            topRight: 6,
-            bottomLeft: 0,
-            bottomRight: 0,
-          },
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 600, easing: "easeOutQuart" },
-      plugins: {
-        legend: { display: false }, // ✅ bỏ label
-        tooltip: {
-          mode: "index",
-          intersect: false,
-          callbacks: {
-            label: (ctx) =>
-              `${ctx.datasetIndex === 0 ? "Period 1" : "Period 2"}: ${
-                ctx.parsed.y
-              } Leads`,
-          },
-        },
-        datalabels: {
-          anchor: "end",
-          align: "end",
-          font: { weight: "bold", size: 12 },
-          color: "#333",
-          formatter: (v) => (v > 0 ? v : ""),
-        },
-      },
-      scales: {
-        x: {
-          stacked: false,
-          grid: { color: "rgba(0,0,0,0.05)" },
-          ticks: { color: "#555", font: { size: 12 } },
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: "rgba(0,0,0,0.05)" },
-          ticks: {
-            color: "#666",
-            font: { size: 11 },
-            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k" : v),
-          },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
-        },
-      },
-    },
-    plugins: [ChartDataLabels],
-  });
+  wrap.innerHTML = `
+    <table class="mini_table">
+      <thead>
+        <tr>
+          <th>Trình độ</th>
+          <th>Kỳ 1</th>
+          <th>Kỳ 2</th>
+          <th>Biến động</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 }
+
+
 function renderProgramChartCompare(g1, g2) {
   const ctx = document.getElementById("programChartCompare");
   if (!ctx) return;
@@ -4738,123 +4747,127 @@ function renderLeadTagChartCompare(g1, g2) {
   const ctx = document.getElementById("leadTagChartCompare");
   if (!ctx || !g1?.byTag || !g2?.byTag) return;
 
-  // 🔹 Lấy dữ liệu tag từ 2 giai đoạn
   const tags = new Set([...Object.keys(g1.byTag), ...Object.keys(g2.byTag)]);
-
   if (!tags.size) return;
 
   const labels = Array.from(tags);
   const values1 = labels.map((tag) => g1.byTag[tag]?.length || 0);
   const values2 = labels.map((tag) => g2.byTag[tag]?.length || 0);
-
   const maxValue = Math.max(...values1, ...values2);
 
-  // 🎨 Màu cam & tím
-  const color1 = "rgba(255, 171, 0, 0.9)";
-  const color2 = "rgba(38,42,83, 0.9)";
-
-  // 🔄 Nếu chart đã có → update nhanh
+  const color1 = "rgba(255, 183, 40, 0.36)";
+  const color2 = "rgba(78, 83, 136, 0.3)";
+  const border1 = "rgba(255, 183, 40, 0.5)";
+  const border2 = "rgba(78, 83, 136, 0.5)";
   if (window.leadTagChartCompareInstance) {
     const chart = window.leadTagChartCompareInstance;
     chart.data.labels = labels;
     chart.data.datasets[0].data = values1;
     chart.data.datasets[1].data = values2;
+  
+    // 🧠 Cập nhật lại max scale theo dữ liệu mới (không nâng max, không thập phân)
+    chart.options.scales.r.max = Math.ceil(maxValue);
+    chart.options.scales.r.ticks.stepSize = Math.ceil(maxValue / 4) || 1;
+    chart.options.scales.r.ticks.callback = (v) => Number.isInteger(v) ? v : ""; // chỉ hiện số nguyên
+  
     chart.update("none");
     return;
   }
-
-  // 🚀 Tạo chart mới
+  
+  
   window.leadTagChartCompareInstance = new Chart(ctx, {
-    type: "bar",
+    type: "radar",
     data: {
       labels,
       datasets: [
         {
-          label: "",
+          label: "Period 1",
           data: values1,
           backgroundColor: color1,
-          borderSkipped: "bottom",
-          borderRadius: {
-            topLeft: 6,
-            topRight: 6,
-            bottomLeft: 0,
-            bottomRight: 0,
-          },
+          borderColor: border1,
+          borderWidth: 2,
+          pointBackgroundColor: border1,
+          pointRadius: 4,
+          pointHoverRadius: 6,
         },
         {
-          label: "",
+          label: "Period 2",
           data: values2,
           backgroundColor: color2,
-          borderSkipped: "bottom",
-          borderRadius: {
-            topLeft: 6,
-            topRight: 6,
-            bottomLeft: 0,
-            bottomRight: 0,
-          },
+          borderColor: border2,
+          borderWidth: 2,
+          pointBackgroundColor: border2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 400, easing: "easeOutCubic" },
+      animation: { duration: 500, easing: "easeOutCubic" },
       plugins: {
-        legend: { display: false }, // ✅ bỏ legend
+        legend: {
+          display: false,
+        },
         tooltip: {
-          mode: "index",
-          intersect: false,
           callbacks: {
-            label: (ctx) =>
-              `${ctx.datasetIndex === 0 ? "Period 1" : "Period 2"}: ${
-                ctx.parsed.y
-              } leads`,
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.r} leads`,
           },
         },
+        // ❌ Tắt hiển thị số ở chấm
         datalabels: {
-          anchor: "end",
-          align: "end",
-          font: { weight: "bold", size: 12 },
-          color: "#333",
-          formatter: (v) => (v > 0 ? v : ""),
+          display: false,
         },
       },
       scales: {
-        x: {
-          grid: { display: false, drawBorder: false },
-          ticks: { font: { size: 12 }, color: "#555" },
-        },
-        y: {
+        r: {
           beginAtZero: true,
+          min: 0,
+          max: maxValue,
           ticks: {
-            font: { size: 11 },
-            color: "#666",
             stepSize: Math.ceil(maxValue / 4) || 1,
+            color: "#555",
+            showLabelBackdrop: false,
             callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
           },
-          afterDataLimits: (scale) => (scale.max *= 1.05),
-          grid: { color: "rgba(0,0,0,0.04)" },
+          grid: { color: "rgba(0,0,0,0.08)" },
+          angleLines: { color: "rgba(0,0,0,0.08)" },
+          pointLabels: {
+            font: { size: 12, weight: "500" },
+            color: "#333",
+          },
         },
       },
     },
     plugins: [ChartDataLabels],
   });
 }
+
 // 🧩 Hàm lọc dữ liệu theo account hiện tại
 function filterByAccount(data, account) {
   if (!data?.length) return [];
-  if (account === "VTCI") {
+
+  // 🧩 Nếu chọn "Total Data" thì không lọc
+  if (account === "Total Data") return data;
+
+  // 🧩 Lấy toàn bộ danh sách account từ HTML
+  const accElements = document.querySelectorAll("ul.box_shadow li[data-acc]");
+  const accList = Array.from(accElements).map(li =>
+    li.getAttribute("data-acc").trim().toUpperCase()
+  );
+
+  // 🧩 Nếu account được chọn hợp lệ trong danh sách
+  if (accList.includes(account.toUpperCase())) {
     return data.filter(
-      (l) => l.CustomField16Text?.trim().toUpperCase() === "VTCI"
+      (l) => l.CustomField16Text?.trim().toUpperCase() === account.toUpperCase()
     );
   }
-  if (account === "IDEAS") {
-    return data.filter(
-      (l) => l.CustomField16Text?.trim().toUpperCase() === "IDEAS"
-    );
-  }
-  return data; // Total Data → không lọc
+
+  // 🔹 Nếu không match gì, trả lại toàn bộ
+  return data;
 }
+
 
 function renderLeadSaleCompare(g1, g2) {
   if (!g1?.byOwner || !g2?.byOwner) return;
@@ -5275,7 +5288,7 @@ function generateAdvancedCompareReport() {
     const wrap = document.querySelector(".dom_ai_report");
     if (!wrap) return;
     wrap.querySelectorAll(".fade_in_item").forEach((el, i) => {
-      setTimeout(() => el.classList.add("show"), i * 200);
+      setTimeout(() => el.classList.add("show"), i * 300);
     });
   }, 3000);
 }
@@ -5285,23 +5298,19 @@ function renderCompareToplist(grouped1, grouped2) {
   if (!wrap1 || !wrap2)
     return console.warn("Không tìm thấy compare_ads_1 hoặc compare_ads_2.");
 
-  // 🧹 Xóa nội dung cũ
   wrap1.innerHTML = "";
   wrap2.innerHTML = "";
 
-  // 🔹 Hàm dựng danh sách đơn giản từ grouped
+  // 🔹 Dựng list
   const buildList = (grouped) => {
     const list = [];
     if (!grouped?.byCampaign) return list;
-
     for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
       for (const [source, mediums] of Object.entries(sources)) {
         for (const [medium, leads] of Object.entries(mediums)) {
           const total = leads.length;
           const needed = leads.filter((l) => l.TagMain === "Needed").length;
-          const considering = leads.filter(
-            (l) => l.TagMain === "Considering"
-          ).length;
+          const considering = leads.filter((l) => l.TagMain === "Considering").length;
           const quality = needed + considering;
           const ratio = total ? (quality / total) * 100 : 0;
           list.push({
@@ -5322,38 +5331,18 @@ function renderCompareToplist(grouped1, grouped2) {
   const list1 = buildList(grouped1);
   const list2 = buildList(grouped2);
 
-  // 🧩 Map theo key chung
   const allKeys = Array.from(
     new Set([...list1.map((x) => x.key), ...list2.map((x) => x.key)])
   );
 
-  // ⚙️ Chuẩn bị logo
   const getLogo = (key) => {
     const logos = [
-      {
-        match: /facebook|fb/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-      },
-      {
-        match: /google/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-      },
-      {
-        match: /linkedin/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-      },
-      {
-        match: /tiktok/i,
-        url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-      },
-      {
-        match: /Web IDEAS/i,
-        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-      },
-      {
-        match: /Web VTCI/i,
-        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-      },
+      { match: /facebook|fb/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png" },
+      { match: /google/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png" },
+      { match: /linkedin/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png" },
+      { match: /tiktok/i, url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg" },
+      { match: /Web IDEAS/i, url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp" },
+      { match: /Web VTCI/i, url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp" },
     ];
     const logo = logos.find((x) => x.match.test(key));
     return logo
@@ -5361,62 +5350,64 @@ function renderCompareToplist(grouped1, grouped2) {
       : "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
   };
 
-  // 🧠 Gom 2 bên theo key
   const compareList = allKeys.map((key) => {
     const a = list1.find((x) => x.key === key);
     const b = list2.find((x) => x.key === key);
     const diff = (a?.ratio || 0) - (b?.ratio || 0);
-    return {
-      key,
-      a,
-      b,
-      diff,
-      absDiff: Math.abs(diff),
-    };
+    return { key, a, b, diff, absDiff: Math.abs(diff) };
   });
 
-  // 🔽 Sắp xếp: giống nhau lên trên, khác nhau xuống dưới
   compareList.sort((x, y) => {
-    if (x.a && x.b && y.a && y.b) return y.a.total - x.a.total; // giống nhau: sắp theo total
-    if (x.a && !x.b) return 1; // chỉ có bên 1 => xuống dưới
-    if (!x.a && x.b) return 1; // chỉ có bên 2 => xuống dưới
-    return y.absDiff - x.absDiff; // khác nhau nhiều hơn lên trước trong nhóm khác
+    if (x.a && x.b && y.a && y.b) return y.a.total - x.a.total;
+    if (x.a && !x.b) return 1;
+    if (!x.a && y.b) return 1;
+    return y.absDiff - x.absDiff;
   });
 
-  // 🚀 Render 2 bên
-  compareList.forEach((item) => {
-    const renderItem = (data) => {
-      if (!data)
-        return `
-        <li class="missing">
-          <p><span>—</span></p>
-          <p><span>0</span></p>
-          <p><span>0</span></p>
-          <p><span>0%</span></p>
-        </li>`;
-      let color = "rgb(0, 177, 72)";
-      if (data.ratio < 20) color = "rgb(225, 112, 85)";
-      else if (data.ratio < 40) color = "rgb(255, 169, 0)";
-      const rgba = color.replace("rgb(", "").replace(")", "");
-      return `
-      <li data-campaign="${data.campaign}" data-source="${
-        data.source
-      }" data-medium="${data.medium}">
-        <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${
-        data.source
-      } - ${data.medium}</span></p>
-        <p><i class="fa-solid fa-user"></i><span>${data.total}</span></p>
-        <p><i class="fa-solid fa-user-graduate"></i><span>${
-          data.quality
-        }</span></p>
-        <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${
-        data.ratio
-      }%</p>
-      </li>`;
-    };
+  const renderItem = (data, cls = "") => {
+    let color = "rgb(0, 177, 72)";
+    if (data.ratio < 20) color = "rgb(225, 112, 85)";
+    else if (data.ratio < 40) color = "rgb(255, 169, 0)";
+    const rgba = color.replace("rgb(", "").replace(")", "");
+    return `
+    <li class="${cls}" data-campaign="${data.campaign}" data-source="${data.source}" data-medium="${data.medium}">
+      <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${data.source} - ${data.medium}</span></p>
+      <p><i class="fa-solid fa-user"></i><span>${data.total}</span></p>
+      <p><i class="fa-solid fa-user-graduate"></i><span>${data.quality}</span></p>
+      <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${data.ratio}%</p>
+    </li>`;
+  };
 
-    wrap1.insertAdjacentHTML("beforeend", renderItem(item.a));
-    wrap2.insertAdjacentHTML("beforeend", renderItem(item.b));
+  compareList.forEach((item) => {
+    let a = item.a;
+    let b = item.b;
+
+    if (!a && b) {
+      a = { ...b, total: 0, quality: 0, ratio: 0 };
+    }
+    if (!b && a) {
+      b = { ...a, total: 0, quality: 0, ratio: 0 };
+    }
+
+    // 🟩 Xác định class up/down/inactive
+    let classA = "";
+    let classB = "";
+
+    if (!item.a) classA = "inactive";
+    if (!item.b) classB = "inactive";
+
+    if (a && b) {
+      if (a.total > b.total) {
+        classA += " up";
+        classB += " down";
+      } else if (a.total < b.total) {
+        classA += " down";
+        classB += " up";
+      }
+    }
+
+    wrap1.insertAdjacentHTML("beforeend", renderItem(a, classA.trim()));
+    wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
   });
 }
 
