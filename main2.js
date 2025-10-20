@@ -321,7 +321,9 @@ const currentFilter = { campaign: null, source: null, medium: null };
 
 async function main() {
   performance.mark("start_main");
+  const items = document.querySelectorAll(".dom_dashboard .dom_fade_item");
 
+  
   const initRange = getDateRange("last_7days");
   const dateText = document.querySelector(".dom_date");
   dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
@@ -341,6 +343,7 @@ async function main() {
   setupLeadSearch();
   setupDropdowns();
   setupTagClick();
+initSaleDetailClose();
   // setupSaleAIReportButton();
   performance.mark("end_main");
   console.log(
@@ -348,11 +351,18 @@ async function main() {
     performance.measure("main_total", "start_main", "end_main")
   );
   document.querySelector(".loading")?.classList.remove("active");
+  items.forEach((el, i) => {
+    setTimeout(() => {
+      el.classList.add("show");
+    }, i * 150); // mỗi cái cách nhau 100ms
+  });
 }
 
 // ✅ Gọi init để đảm bảo token xong mới chạy main
 (async () => {
+  console.time("⏱ DOM Dashboard Loaded");
   await main();
+  console.timeEnd("⏱ DOM Dashboard Loaded");
 })();
 
 function generateAdvancedReport(RAW_DATA) {
@@ -2645,15 +2655,16 @@ document.addEventListener("click", (e) => {
   if (aiBtn) {
     const panel = document.querySelector(".dom_ai_report");
     if (!panel) return;
-
+    
     // Gọi báo cáo
     generateAdvancedReport(CRM_DATA);
-
+    
     // Kích hoạt panel
     panel.classList.add("active");
-
+    
     // Scroll panel lên đầu
-    panel.scrollTop = 0;
+    const dom_ai_report_content = document.querySelector(".dom_ai_report_content");
+    dom_ai_report_content.scrollTop = 0;
     // Hoặc nếu muốn cuộn cả body theo panel: panel.scrollIntoView({ behavior: "smooth" });
 
     // Sau 3s (giả lập load + chờ), cho từng item fade-in
@@ -2674,7 +2685,8 @@ document.addEventListener("click", (e) => {
     generateAdvancedCompareReport();
     // Kích hoạt panel
     panel.classList.add("active");
-    panel.scrollTop = 0;
+    const dom_ai_report_content = document.querySelector(".dom_ai_report_content");
+    dom_ai_report_content.scrollTop = 0;
     return; // chặn event tiếp
   }
   if (aiBtnS) {
@@ -2689,7 +2701,8 @@ document.addEventListener("click", (e) => {
     // Kích hoạt panel
     panel.classList.add("active");
 
-    panel.scrollTop = 0;
+    const dom_ai_report_content = document.querySelector(".dom_ai_report_content");
+    dom_ai_report_content.scrollTop = 0;
 
     return; // chặn event tiếp
   }
@@ -3374,36 +3387,44 @@ function renderDegreeChart(grouped) {
   if (!data.length) return;
 
   // 🧩 Regex pre-compile
-  const regex = {
-    duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
-    caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
-    thpt: /thpt/i,
-    sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
-    cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
-    thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i, // ✅ thêm dòng này
-  };
+// ⚡ Regex - KHÔNG có cờ /g
+const regex = {
+  duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
+  caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
+  thpt: /thpt/i,
+  sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
+  cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
+  thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
+};
 
-  const degreeCounts = {
-    "Cử nhân": 0,
-    "Cao đẳng": 0,
-    "Dưới cao đẳng": 0,
-    THPT: 0,
-    "Sinh viên": 0,
-    "Thạc sĩ": 0,
-    Khác: 0,
-  };
+const degreeCounts = {
+  "Cử nhân": 0,
+  "Cao đẳng": 0,
+  "Dưới cao đẳng": 0,
+  THPT: 0,
+  "Sinh viên": 0,
+  "Thạc sĩ": 0,
+  Khác: 0,
+};
 
-  // 🔹 Xử lý một lần
-  for (let i = 0; i < data.length; i++) {
-    const desc = (data[i].Description || "").toLowerCase();
-    if (regex.duoiCD.test(desc)) degreeCounts["Dưới cao đẳng"]++;
-    else if (regex.caoDang.test(desc)) degreeCounts["Cao đẳng"]++;
-    else if (regex.thpt.test(desc)) degreeCounts["THPT"]++;
-    else if (regex.cuNhan.test(desc)) degreeCounts["Cử nhân"]++;
-    else if (regex.sinhVien.test(desc)) degreeCounts["Sinh viên"]++;
-    else if (regex.thacSi.test(desc)) degreeCounts["Thạc sĩ"]++;
-    else if (desc.trim() !== "") degreeCounts["Khác"]++;
-  }
+// ⚡ Preprocess mô tả một lần cho nhanh
+const descs = data.map(d => (d.Description ? d.Description.toLowerCase() : ""));
+
+for (const desc of descs) {
+  if (!desc.trim()) continue;
+
+  if (regex.duoiCD.test(desc)) degreeCounts["Dưới cao đẳng"]++;
+  else if (regex.caoDang.test(desc)) degreeCounts["Cao đẳng"]++;
+  else if (regex.thpt.test(desc)) degreeCounts["THPT"]++;
+  else if (regex.cuNhan.test(desc)) degreeCounts["Cử nhân"]++;
+  else if (regex.sinhVien.test(desc)) degreeCounts["Sinh viên"]++;
+  else if (regex.thacSi.test(desc)) degreeCounts["Thạc sĩ"]++;
+  else degreeCounts["Khác"]++;
+}
+
+VIEW_DEGREE = degreeCounts;
+console.log("🎓 degreeCounts:", degreeCounts);
+
   VIEW_DEGREE = degreeCounts;
   console.log("🎓 degreeCounts:", degreeCounts);
 
@@ -3832,7 +3853,6 @@ function initSaleDetailClose() {
 }
 
 // gọi 1 lần khi load dashboard
-initSaleDetailClose();
 
 function renderToplistBySale(grouped) {
   renderSaleDropdown();
