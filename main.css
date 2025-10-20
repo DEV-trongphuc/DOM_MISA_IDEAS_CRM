@@ -333,6 +333,7 @@ html {
 }
 .compare_scroll_wrap {
   margin-top: 3rem !important;
+  align-items: flex-start !important;
 }
 .compare .btn-source i {
   font-size: 1.5rem;
@@ -354,8 +355,24 @@ html {
   border-radius: 8px;
   box-shadow: 0 0px 3px rgba(0, 0, 0, 0.2);
 }
+.compare .dom_toplist {
+  height: max-content;
+  max-height: unset;
+
+}
 .compare .dom_toplist > li {
   grid-template-columns: 1fr 50px 50px 50px;
+}
+.compare .dom_toplist > li.down {
+  background-color: rgb(255, 246, 243);
+}
+.compare .dom_toplist > li.up {
+  background-color: rgb(250, 255, 243);
+}
+.compare .dom_toplist > li.inactive {
+  opacity: 0.8;
+  background-color: var(--fadeClr);
+  filter: grayscale(1);
 }
 .dom_toplist_header P {
   display: flex;
@@ -2213,13 +2230,13 @@ tbody {
   padding-right: 4rem;
 }
 #compare_render {
-  background-color: white;
   flex-direction: column;
   font-size: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   width: 100%;
+  background-color: unset;
 }
 #compare_render > span:first-child i {
   color: var(--mainClr);
@@ -2234,8 +2251,60 @@ tbody {
   max-height: 600px; /* tùy */
   overflow-y: auto;
   display: flex;
+  gap:1rem;
 }
 .compare_scroll_wrap .dom_toplist_wrap {
   height: auto;
   overflow-y: visible;
+  max-height: 36.5rem;
+}
+.mini_table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.3rem;
+  margin-top: 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.13);
+  padding: 1px;
+}
+.mini_table th, .mini_table td {
+  padding: 0.8rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #eee;
+}
+.mini_table th {
+  background: #fafafa;
+  color: #333;
+  font-weight: 600;
+}
+.mini_table tr.up td:last-child {
+  color: #28a745;
+  font-weight: 600;
+}
+.mini_table tr.down td:last-child {
+  color: #dc3545;
+  font-weight: 600;
+}
+.mini_table i.fa-caret-up {
+  color: #28a745;
+  margin-right: 3px;
+}
+.mini_table i.fa-caret-down {
+  color: #dc3545;
+  margin-right: 3px;
+}
+.mini_table td:nth-child(1) {
+  text-align: left;
+  padding-left: 1rem;
+  font-weight: bold;
+}
+.mini_table thead {
+  background-color: var(--subClr) !important;
+}
+.mini_table thead th {
+  background-color: unset;
+  padding: 1.5rem 0;
+  color: white;
+}
+.mini_table tbody td {
+  padding: 1rem 0;
 }
