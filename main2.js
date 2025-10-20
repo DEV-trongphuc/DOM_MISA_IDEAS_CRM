@@ -1,3 +1,4 @@
+
 // ===== Perf Utils (drop-in) =====
 const $$ = (sel, root=document) => root.querySelector(sel);
 const $$$ = (sel, root=document) => root.querySelectorAll(sel);
@@ -33,6 +34,7 @@ const compareState = {
   data1: null,
   data2: null,
 };
+
 let MISA_TOKEN_READY = false; // 🟢 Chỉ login lại lần đầu tiên
 
 function waitForOTP() {
@@ -2920,16 +2922,9 @@ function renderTagFrequency(grouped) {
   // ✅ Cập nhật DOM 1 lần duy nhất
   wrap.insertAdjacentHTML("beforeend", html);
 }
-
-function renderDegreeChart(grouped) {
-  const ctx = document.getElementById("degreeChart");
-  const top_edu = document.getElementById("top_edu");
-  if (!ctx) return;
-
-  const data = Array.isArray(grouped)
-    ? grouped
-    : Object.values(grouped.byOwner||{}).flatMap(o=>o.leads||[]);
-  if (!data.length) return;
+// ========================== HÀM CHUNG ==========================
+function countDegrees(data) {
+  if (!Array.isArray(data)) return {};
 
   const regex = {
     duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
@@ -2940,26 +2935,54 @@ function renderDegreeChart(grouped) {
     thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
   };
 
-  const degreeCounts = { "Cử nhân":0, "Cao đẳng":0, "Dưới cao đẳng":0, THPT:0, "Sinh viên":0, "Thạc sĩ":0, Khác:0 };
-  const descs = data.map(d => (d.Description? d.Description.toLowerCase() : ""));
+  const deg = {
+    "Cử nhân": 0,
+    "Cao đẳng": 0,
+    "Dưới cao đẳng": 0,
+    THPT: 0,
+    "Sinh viên": 0,
+    "Thạc sĩ": 0,
+    Khác: 0,
+  };
+
+  const descs = data.map((d) =>
+    d.Description ? d.Description.toLowerCase() : ""
+  );
 
   for (const desc of descs) {
     if (!desc.trim()) continue;
-    if (regex.duoiCD.test(desc)) degreeCounts["Dưới cao đẳng"]++;
-    else if (regex.caoDang.test(desc)) degreeCounts["Cao đẳng"]++;
-    else if (regex.thpt.test(desc)) degreeCounts["THPT"]++;
-    else if (regex.cuNhan.test(desc)) degreeCounts["Cử nhân"]++;
-    else if (regex.sinhVien.test(desc)) degreeCounts["Sinh viên"]++;
-    else if (regex.thacSi.test(desc)) degreeCounts["Thạc sĩ"]++;
-    else degreeCounts["Khác"]++;
+    if (regex.duoiCD.test(desc)) deg["Dưới cao đẳng"]++;
+    else if (regex.caoDang.test(desc)) deg["Cao đẳng"]++;
+    else if (regex.thpt.test(desc)) deg["THPT"]++;
+    else if (regex.cuNhan.test(desc)) deg["Cử nhân"]++;
+    else if (regex.sinhVien.test(desc)) deg["Sinh viên"]++;
+    else if (regex.thacSi.test(desc)) deg["Thạc sĩ"]++;
+    else deg["Khác"]++;
   }
 
+  return deg;
+}
+
+function renderDegreeChart(grouped) {
+  const ctx = document.getElementById("degreeChart");
+  const top_edu = document.getElementById("top_edu");
+  if (!ctx) return;
+
+  const data = Array.isArray(grouped)
+    ? grouped
+    : Object.values(grouped.byOwner || {}).flatMap((o) => o.leads || []);
+  if (!data.length) return;
+
+  const degreeCounts = countDegrees(data);
   VIEW_DEGREE = degreeCounts;
+
   const labels = Object.keys(degreeCounts);
   const values = Object.values(degreeCounts);
   const maxValue = Math.max(...values);
-  const barColors = values.map(v => v===maxValue ? "#ffa900" : "#d9d9d9");
-  if (top_edu && maxValue>0) top_edu.textContent = labels[values.indexOf(maxValue)]||"";
+  const barColors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
+
+  if (top_edu && maxValue > 0)
+    top_edu.textContent = labels[values.indexOf(maxValue)] || "";
 
   const inst = window.degreeChartInstance;
   if (inst) {
@@ -2974,15 +2997,57 @@ function renderDegreeChart(grouped) {
   }
 
   window.degreeChartInstance = new Chart(ctx, {
-    type:"bar",
-    data:{ labels, datasets:[{ label:"Số lượng Leads theo trình độ học vấn", data:values, backgroundColor:barColors, borderColor:barColors, borderWidth:1, borderRadius:6 }] },
-    options:{
-      responsive:true, maintainAspectRatio:false, animation:{ duration:400, easing:"easeOutCubic" },
-      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:(c)=> `${c.parsed.y.toLocaleString()} Leads` } }, datalabels:{ anchor:"end", align:"end", font:{weight:"bold", size:12}, formatter:(v)=> (v>0?v:"") } },
-      scales:{ x:{ grid:{ color:"rgba(0,0,0,0.05)", drawTicks:false, drawBorder:false }, ticks:{ font:{ size:12 }, color:"#555" } },
-               y:{ beginAtZero:true, ticks:{ font:{ size:11 }, color:"#666", stepSize: Math.ceil(maxValue/4)||1, callback:(v)=> (v>=1000?(v/1000).toFixed(0)+"k":v) }, afterDataLimits:(s)=> (s.max*=1.1), grid:{ color:"rgba(0,0,0,0.05)" } } }
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Số lượng Leads theo trình độ học vấn",
+          data: values,
+          backgroundColor: barColors,
+          borderColor: barColors,
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+      ],
     },
-    plugins:[ChartDataLabels]
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400, easing: "easeOutCubic" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (c) => `${c.parsed.y.toLocaleString()} Leads`,
+          },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: { weight: "bold", size: 12 },
+          formatter: (v) => (v > 0 ? v : ""),
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: "rgba(0,0,0,0.05)", drawTicks: false, drawBorder: false },
+          ticks: { font: { size: 12 }, color: "#555" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 11 },
+            color: "#666",
+            stepSize: Math.ceil(maxValue / 4) || 1,
+            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
+          },
+          afterDataLimits: (s) => (s.max *= 1.1),
+          grid: { color: "rgba(0,0,0,0.05)" },
+        },
+      },
+    },
+    plugins: [ChartDataLabels],
   });
 }
 
@@ -3809,88 +3874,128 @@ function renderCompareTrendChart(g1, g2) {
   const ctx = document.getElementById("leadTrendChartCompare");
   if (!ctx) return;
 
-  const byDate1 = g1.byDate || {};
-  const byDate2 = g2.byDate || {};
+  const byDate1Raw = g1.byDate || {};
+  const byDate2Raw = g2.byDate || {};
 
-  const dates1 = Object.keys(byDate1).sort((a, b) => new Date(a) - new Date(b));
-  const dates2 = Object.keys(byDate2).sort((a, b) => new Date(a) - new Date(b));
+  // normalize key -> YYYY-MM-DD (fallback: trim original)
+  const normalizeKey = (k) => {
+    if (!k && k !== 0) return "";
+    // try Date parse first
+    const dt = new Date(k);
+    if (!isNaN(dt.getTime())) {
+      // lấy yyyy-mm-dd
+      return dt.toISOString().slice(0, 10);
+    }
+    // else fallback: lấy phần trước khoảng trắng (common cases)
+    return String(k).split(/\s+/)[0].trim();
+  };
 
-  const counts1 = dates1.map((d) => byDate1[d]?.total || 0);
-  const counts2 = dates2.map((d) => byDate2[d]?.total || 0);
+  // build maps normalizedKey -> entry
+  const map1 = {};
+  for (const k of Object.keys(byDate1Raw)) {
+    const nk = normalizeKey(k);
+    map1[nk] = byDate1Raw[k];
+  }
+  const map2 = {};
+  for (const k of Object.keys(byDate2Raw)) {
+    const nk = normalizeKey(k);
+    map2[nk] = byDate2Raw[k];
+  }
 
-  const ctx2d = ctx.getContext("2d");
+  // union of dates
+  const dateSet = new Set([...Object.keys(map1), ...Object.keys(map2)]);
+  const dates = Array.from(dateSet).sort((a, b) => new Date(a) - new Date(b));
 
-  // 🎨 Gradient
-  let grad1 = ctx2d.createLinearGradient(0, 0, 0, 400);
-  grad1.addColorStop(0, "rgba(255, 171, 0, 0.8)");
-  grad1.addColorStop(1, "rgba(255, 171, 0, 0.1)");
+  // helper lấy total an toàn (hỗ trợ nhiều tên trường)
+  const getTotalFromEntry = (entry) => {
+    if (!entry) return 0;
+    // thử các trường khả dĩ
+    const candidates = ["total", "Total", "count", "Count", "total_leads", "totalLead"];
+    for (const c of candidates) {
+      if (entry[c] !== undefined && entry[c] !== null) {
+        const n = Number(entry[c]);
+        return isNaN(n) ? 0 : n;
+      }
+    }
+    // nếu object là mảng (một số cấu trúc store as array)
+    if (Array.isArray(entry)) return entry.length;
+    // nếu entry có length property
+    if (entry.length !== undefined) {
+      const n = Number(entry.length);
+      return isNaN(n) ? 0 : n;
+    }
+    return 0;
+  };
 
-  let grad2 = ctx2d.createLinearGradient(0, 0, 0, 400);
-  grad2.addColorStop(0, "rgba(38,42,83, 0.8)");
-  grad2.addColorStop(1, "rgba(38,42,83, 0.1)");
+  const counts1 = dates.map((d) => getTotalFromEntry(map1[d]));
+  const counts2 = dates.map((d) => getTotalFromEntry(map2[d]));
+  const maxValue = Math.max(...counts1, ...counts2, 0);
 
-  // 🔄 Xóa chart cũ nếu có
-  if (window.compareChartInstance) window.compareChartInstance.destroy();
+  // debug quick check: nếu counts2 toàn 0 thì log chi tiết
+  if (counts2.every((v) => v === 0)) {
+    console.warn("renderCompareTrendChart: all counts2 are 0 — kiểm tra map2 và raw keys:");
+    console.table({
+      datesSample: dates.slice(0, 10),
+      map2KeysSample: Object.keys(map2).slice(0, 10),
+      rawByDate2KeysSample: Object.keys(byDate2Raw).slice(0, 10),
+    });
+  }
 
-  // 🚀 Vẽ chart mới
+  const c2d = ctx.getContext("2d");
+  // reuse gradients
+  if (!window._gradRange1 || !window._gradRange2) {
+    const g1 = c2d.createLinearGradient(0, 0, 0, 400);
+    g1.addColorStop(0, "rgba(255, 171, 0, 0.8)");
+    g1.addColorStop(1, "rgba(255, 171, 0, 0.1)");
+    const g2 = c2d.createLinearGradient(0, 0, 0, 400);
+    g2.addColorStop(0, "rgba(38,42,83, 0.8)");
+    g2.addColorStop(1, "rgba(38,42,83, 0.1)");
+    window._gradRange1 = g1;
+    window._gradRange2 = g2;
+  }
+
+  const inst = window.compareChartInstance;
+  if (inst) {
+    if (
+      arraysEqual(inst.data.labels, dates) &&
+      arraysEqual(inst.data.datasets[0].data, counts1) &&
+      arraysEqual(inst.data.datasets[1].data, counts2)
+    )
+      return;
+    inst.data.labels = dates;
+    inst.data.datasets[0].data = counts1;
+    inst.data.datasets[1].data = counts2;
+    inst.options.animation.duration = 300;
+    inst.update("active");
+    return;
+  }
+
   window.compareChartInstance = new Chart(ctx, {
     type: "line",
     data: {
-      labels: dates1.length >= dates2.length ? dates1 : dates2,
+      labels: dates,
       datasets: [
-        {
-          label: "",
-          data: counts1,
-          backgroundColor: grad1,
-          borderColor: "#ffab00",
-          fill: true,
-          pointRadius: 0,
-          borderWidth: 2,
-        },
-        {
-          label: "",
-          data: counts2,
-          backgroundColor: grad2,
-          borderColor: "#262a53",
-          fill: true,
-          pointRadius: 0,
-          borderWidth: 2,
-        },
-      ],
+        { label: "Range 1", data: counts1, backgroundColor: window._gradRange1, borderColor: "#ffab00", fill: true, tension: 0, pointRadius: 3, borderWidth: 2 },
+        { label: "Range 2", data: counts2, backgroundColor: window._gradRange2, borderColor: "#262a53", fill: true, tension: 0, pointRadius: 3, borderWidth: 2 }
+      ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 600, easing: "easeOutQuart" },
-      elements: { line: { borderJoinStyle: "round" } },
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 400 },
       plugins: {
-        legend: { display: false }, // ✅ Ẩn chú thích
-        tooltip: {
-          mode: "index",
-          intersect: false,
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
-          },
-        },
+        legend: { position: "top", align: "end" },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} leads` } },
+        datalabels: { anchor: "end", align: "end", font: { weight: "bold", size: 12 }, color: "#333", formatter: (v) => (v > 0 ? v.toLocaleString() : "") }
       },
       scales: {
-        x: {
-          ticks: { color: "#555", maxTicksLimit: 10 },
-          grid: { color: "rgba(0,0,0,0.05)" },
-        },
-        y: {
-          beginAtZero: true,
-          ticks: {
-            color: "#666",
-            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k" : v),
-          },
-          grid: { color: "rgba(0,0,0,0.05)" },
-          afterDataLimits: (scale) => (scale.max *= 1.05),
-        },
-      },
+        x: { grid: { color: "rgba(0,0,0,0.05)" }, ticks: { color: "#444", autoSkip: true, maxTicksLimit: 8 } },
+        y: { beginAtZero: true, grid: { color: "rgba(0,0,0,0.05)" }, ticks: { color: "#666", stepSize: Math.ceil(maxValue / 4) }, afterDataLimits: (s) => (s.max *= 1.1) }
+      }
     },
+    plugins: [ChartDataLabels]
   });
 }
+
 function renderDegreeTableCompare(g1, g2) {
   const wrap = document.getElementById("degreeChartCompare");
   if (!wrap) return;
@@ -3908,42 +4013,6 @@ function renderDegreeTableCompare(g1, g2) {
     return;
   }
 
-  const regex = {
-    duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
-    caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
-    thpt: /thpt/i,
-    sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
-    cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
-    thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
-  };
-
-  const initDegrees = () => ({
-    "Cử nhân": 0,
-    "Cao đẳng": 0,
-    "Dưới cao đẳng": 0,
-    THPT: 0,
-    "Sinh viên": 0,
-    "Thạc sĩ": 0,
-    Khác: 0,
-  });
-
-  const countDegrees = (data) => {
-    const deg = initDegrees();
-    const descs = data.map((d) => (d.Description ? d.Description.toLowerCase() : ""));
-    for (let i = 0; i < descs.length; i++) {
-      const desc = descs[i];
-      if (!desc.trim()) continue;
-      if (regex.duoiCD.test(desc)) deg["Dưới cao đẳng"]++;
-      else if (regex.caoDang.test(desc)) deg["Cao đẳng"]++;
-      else if (regex.thpt.test(desc)) deg["THPT"]++;
-      else if (regex.cuNhan.test(desc)) deg["Cử nhân"]++;
-      else if (regex.sinhVien.test(desc)) deg["Sinh viên"]++;
-      else if (regex.thacSi.test(desc)) deg["Thạc sĩ"]++;
-      else deg["Khác"]++;
-    }
-    return deg;
-  };
-
   const degPrev = countDegrees(data1); // kỳ 1
   const degCurr = countDegrees(data2); // kỳ 2
 
@@ -3953,7 +4022,7 @@ function renderDegreeTableCompare(g1, g2) {
     .map((label) => {
       const prev = degPrev[label] || 0;
       const curr = degCurr[label] || 0;
-      const diff = prev - curr; // 🔁 đảo chiều: kỳ 1 - kỳ 2
+      const diff = prev -curr ; // 🟢 Kỳ 2 - Kỳ 1 (hợp logic)
       const trendClass = diff > 0 ? "up" : diff < 0 ? "down" : "";
       const arrow =
         diff > 0
@@ -5028,31 +5097,54 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
     })
     .filter((x) => x.v1 > 0 || x.v2 > 0); // chỉ giữ khi có data
 
-  const detectDegree = (txt) => {
-    const t = txt.toLowerCase();
-    if (/dưới.*cao.*đẳng/.test(t)) return "Dưới cao đẳng";
-    if (/cao.*đẳng/.test(t)) return "Cao đẳng";
-    if (/thpt/.test(t)) return "THPT";
-    if (/sinh.*viên/.test(t)) return "Sinh viên";
-    if (/cử.*nhân/.test(t)) return "Cử nhân";
-    if (/thạc.*sĩ/.test(t)) return "Thạc sĩ";
-    return "Khác";
-  };
-  const countDegree = (arr) => {
-    const out = {};
-    for (const l of arr) {
-      const deg = detectDegree(l.Description || l.CustomField5Text || "");
-      out[deg] = (out[deg] || 0) + 1;
-    }
-    return out;
-  };
+    const DEGREE_REGEX = {
+      duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
+      caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
+      thpt: /thpt/i,
+      sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
+      cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
+      thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
+    };
+    
+    // 👉 Hàm xác định học vị
+    const detectDegree = (txt = "") => {
+      const t = txt.toLowerCase()
+    
+      if (DEGREE_REGEX.duoiCD.test(t)) return "Dưới cao đẳng";
+      if (DEGREE_REGEX.caoDang.test(t)) return "Cao đẳng";
+      if (DEGREE_REGEX.thpt.test(t)) return "THPT";
+      if (DEGREE_REGEX.cuNhan.test(t)) return "Cử nhân";
+      if (DEGREE_REGEX.sinhVien.test(t)) return "Sinh viên";
+      if (DEGREE_REGEX.thacSi.test(t)) return "Thạc sĩ";
+      return "Khác";
+    };
+    
+    // 👉 Hàm đếm học vị
+    const countDegree = (arr = []) => {
+      const degCount = {
+        "Dưới cao đẳng": 0,
+        "THPT": 0,
+        "Cao đẳng": 0,
+        "Sinh viên": 0,
+        "Cử nhân": 0,
+        "Thạc sĩ": 0,
+        "Khác": 0,
+      };
+    
+      for (const l of arr) {
+        const text = l.Description || l.CustomField5Text || "";
+        const degree = detectDegree(text);
+        degCount[degree]++;
+      }
+    
+      return degCount;
+    };
   const degreeCompare = makeCompareArr(countDegree(d1), countDegree(d2));
 
   const miniTable = (title, arr, keyName, delay = 0) => {
     if (!arr?.length) return "";
     const rows = arr
       .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
-      .slice(0, 5)
       .map(
         (x) => `
         <tr>
