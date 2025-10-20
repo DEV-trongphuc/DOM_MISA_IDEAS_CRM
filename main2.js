@@ -185,39 +185,41 @@ async function fetchLeadData(from, to, token) {
   return [];
 }
 async function fetchLeads(from, to) {
-  // const loading = document.querySelector(".loading");
-  // loading.classList.add("active");
-
   let data = null;
   let token = null;
 
   try {
-    // 1️⃣ Lấy token (ưu tiên localStorage hoặc quickLogin)
+    // 1️⃣ Ưu tiên token trong localStorage hoặc quickLogin
     token = await getToken("numt@ideas.edu.vn", "Ideas123456");
     console.log("🔑 Token hiện tại:", token.slice(0, 20) + "...");
 
     // 2️⃣ Gọi API chính
     data = await fetchLeadData(from, to, token);
 
-    // 3️⃣ Nếu có phản hồi OK nhưng không có dữ liệu (length = 0)
+    // 🟡 Nếu có phản hồi OK nhưng data rỗng → có thể token cũ hết hạn
     if (Array.isArray(data) && data.length === 0) {
-      console.warn("⚠️ Không có dữ liệu trong khoảng thời gian này.");
-      alert("Không có dữ liệu trong khoảng thời gian này.");
-      return [];
+      console.warn("⚠️ Token local có thể hết hạn → thử xoá và quickLogin lại...");
+      localStorage.removeItem("misa_token");
+
+      const quick = await quickLogin();
+      if (quick) {
+        token = quick;
+        data = await fetchLeadData(from, to, token);
+      }
     }
 
-    // 4️⃣ Nếu data không hợp lệ → có thể token lỗi → login lại bằng forceLogin
-    if (!data || !Array.isArray(data)) {
-      console.warn("⚠️ Token có thể hết hạn → login lại bằng forceLogin...");
+    // 3️⃣ Nếu vẫn không có dữ liệu, thử login đầy đủ (OTP)
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      console.warn("⚠️ quickLogin không ra data → loginFlow bằng OTP...");
       localStorage.removeItem("misa_token");
 
       token = await getToken("numt@ideas.edu.vn", "Ideas123456", true);
       data = await fetchLeadData(from, to, token);
     }
 
-    // 5️⃣ Nếu vẫn không có dữ liệu
+    // 4️⃣ Nếu vẫn không có dữ liệu
     if (!data?.length) {
-      console.error("❌ Không có dữ liệu sau khi login lại!");
+      console.error("❌ Không có dữ liệu sau mọi cách!");
       alert("IDEAS CRM không có phản hồi hoặc token bị lỗi!");
     } else {
       console.log(`✅ Đã tải ${data.length} leads`);
@@ -226,12 +228,11 @@ async function fetchLeads(from, to) {
   } catch (err) {
     console.error("🚨 Lỗi fetchLeads:", err);
     alert("Không thể kết nối đến IDEAS CRM!");
-  } finally {
-    // loading.classList.remove("active");
   }
 
   return data || [];
 }
+
 
 // async function fetchLeads(from, to) {
 //   const loading = document.querySelector(".loading");
