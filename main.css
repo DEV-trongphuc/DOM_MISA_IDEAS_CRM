@@ -31,7 +31,10 @@ button {
   outline: none;
   border: 0;
 }
-
+a {
+  text-decoration: none;
+  color: unset;
+}
 :root {
   --textClr: #333;
   --fadeClr: #f8f8f8;
@@ -169,11 +172,13 @@ html {
   color: var(--textClr);
   opacity: 0.9;
 }
-.dom_menu {
+.dom_menu,
+.dom_other_menu {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
+.dom_other_menu li a,
 .dom_menu li {
   display: flex;
   align-items: center;
@@ -183,6 +188,7 @@ html {
   cursor: pointer;
   transition: all 0.2s ease-in-out;
 }
+.dom_other_menu li a i,
 .dom_menu li i {
   font-size: 2rem;
   margin-right: 1rem;
@@ -190,6 +196,11 @@ html {
   opacity: 0.8;
   width: 2rem;
   color: var(--textClr);
+}
+.dom_other_menu li a i:last-child {
+  font-size: 1rem;
+  color: var(--subClr);
+  margin-left: 1rem;
 }
 .dom_menu li.active i {
   color: var(--mainClr);
