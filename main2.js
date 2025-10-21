@@ -1,3 +1,31 @@
+// ===== Perf Utils (drop-in) =====
+const $$ = (sel, root = document) => root.querySelector(sel);
+const $$$ = (sel, root = document) => root.querySelectorAll(sel);
+
+const scheduleIdle = (fn, timeout = 200) => {
+  if ("requestIdleCallback" in window)
+    return requestIdleCallback(fn, { timeout });
+  return setTimeout(fn, Math.min(40, timeout));
+};
+const scheduleRAF = (fn) => requestAnimationFrame(fn);
+const debounce = (fn, wait = 150) => {
+  let t;
+  return (...a) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...a), wait);
+  };
+};
+const arraysEqual = (a, b) =>
+  a.length === b.length && a.every((v, i) => v === b[i]);
+const setText = (el, text) => {
+  if (el && el.textContent !== text) el.textContent = text;
+};
+const DOMCACHE = new Map();
+const qsc = (sel) => {
+  if (!DOMCACHE.has(sel)) DOMCACHE.set(sel, $$(sel));
+  return DOMCACHE.get(sel);
+};
+
 // ----------------------------------------
 // ⚙️ Cấu hình Tag ưu tiên
 // ----------------------------------------
@@ -17,6 +45,9 @@ const compareState = {
   data1: null,
   data2: null,
 };
+
+let MISA_TOKEN_READY = false; // 🟢 Chỉ login lại lần đầu tiên
+
 function waitForOTP() {
   return new Promise((resolve, reject) => {
     const container = document.querySelector(".dom_accounts");
@@ -184,21 +215,57 @@ async function fetchLeadData(from, to, token) {
   console.error("❌ Hết 3 lượt gọi mà không có dữ liệu hợp lệ");
   return [];
 }
+
 async function fetchLeads(from, to) {
   let data = null;
   let token = null;
-
   try {
-    // 1️⃣ Ưu tiên token trong localStorage hoặc quickLogin
+    // 🔹 1️⃣ Nếu đã login 1 lần rồi, chỉ dùng lại token cũ
+    if (MISA_TOKEN_READY) {
+      token = localStorage.getItem("misa_token");
+      data = await fetchLeadData(from, to, token);
+
+      console.log(
+        `📅 Fetch range ${from} → ${to}:`,
+        data?.length || 0,
+        "leads"
+      );
+
+      // 🟢 Tắt loading
+
+      // 🔹 Lưu lại data mới nhất
+      if (Array.isArray(data)) {
+        CRM_DATA = data;
+        localStorage.setItem(
+          "crm_latest_data",
+          JSON.stringify({
+            from,
+            to,
+            count: data.length,
+            leads: data,
+          })
+        );
+        console.log("💾 Đã lưu data mới nhất vào CRM_DATA & localStorage");
+      }
+
+      // 🔸 Nếu không có dữ liệu → báo nhẹ
+      if (!data?.length) {
+        alert("Không có dữ liệu trong khoảng thời gian này!");
+        document.querySelector(".loading")?.classList.remove("active");
+      }
+
+      return data || [];
+    }
+
+    // 🔹 2️⃣ Còn nếu lần đầu (chưa xác thực)
     token = await getToken("numt@ideas.edu.vn", "Ideas123456");
     console.log("🔑 Token hiện tại:", token.slice(0, 20) + "...");
 
-    // 2️⃣ Gọi API chính
     data = await fetchLeadData(from, to, token);
 
-    // 🟡 Nếu có phản hồi OK nhưng data rỗng → có thể token cũ hết hạn
+    // 🔸 Nếu token cũ hết hạn → quickLogin
     if (Array.isArray(data) && data.length === 0) {
-      console.warn("⚠️ Token local có thể hết hạn → thử xoá và quickLogin lại...");
+      console.warn("⚠️ Token local có thể hết hạn → thử quickLogin...");
       localStorage.removeItem("misa_token");
 
       const quick = await quickLogin();
@@ -208,31 +275,34 @@ async function fetchLeads(from, to) {
       }
     }
 
-    // 3️⃣ Nếu vẫn không có dữ liệu, thử login đầy đủ (OTP)
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      console.warn("⚠️ quickLogin không ra data → loginFlow bằng OTP...");
+    // 🔸 Nếu vẫn fail → login OTP (chỉ lần đầu)
+    if (!data?.length) {
+      console.warn("⚠️ quickLogin thất bại → loginFlow OTP...");
       localStorage.removeItem("misa_token");
 
       token = await getToken("numt@ideas.edu.vn", "Ideas123456", true);
       data = await fetchLeadData(from, to, token);
     }
 
-    // 4️⃣ Nếu vẫn không có dữ liệu
-    if (!data?.length) {
-      console.error("❌ Không có dữ liệu sau mọi cách!");
-      alert("IDEAS CRM không có phản hồi hoặc token bị lỗi!");
-    } else {
-      console.log(`✅ Đã tải ${data.length} leads`);
-      CRM_DATA = data;
+    // ✅ Nếu đã fetch được hợp lệ 1 lần → khóa retry logic
+    if (Array.isArray(data)) {
+      MISA_TOKEN_READY = true;
+      console.log(`✅ Token OK, đã bật MISA_TOKEN_READY`);
     }
+
+    if (!data?.length) {
+      console.log("ℹ️ Không có dữ liệu (nhưng token hợp lệ).");
+      return [];
+    }
+
+    console.log(`✅ Đã tải ${data.length} leads`);
+    CRM_DATA = data;
   } catch (err) {
     console.error("🚨 Lỗi fetchLeads:", err);
     alert("Không thể kết nối đến IDEAS CRM!");
   }
-
   return data || [];
 }
-
 
 // async function fetchLeads(from, to) {
 //   const loading = document.querySelector(".loading");
@@ -320,15 +390,14 @@ const currentFilter = { campaign: null, source: null, medium: null };
 // ----------------------------------------
 
 async function main() {
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
   performance.mark("start_main");
   const items = document.querySelectorAll(".dom_dashboard .dom_fade_item");
 
-  
   const initRange = getDateRange("last_7days");
   const dateText = document.querySelector(".dom_date");
   dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
-
-  document.querySelector(".loading")?.classList.add("active");
 
   const t0 = performance.now();
   RAW_DATA = await fetchLeads(initRange.from, initRange.to);
@@ -343,14 +412,14 @@ async function main() {
   setupLeadSearch();
   setupDropdowns();
   setupTagClick();
-initSaleDetailClose();
+  initSaleDetailClose();
   // setupSaleAIReportButton();
   performance.mark("end_main");
   console.log(
     "⏱ Total main():",
     performance.measure("main_total", "start_main", "end_main")
   );
-  document.querySelector(".loading")?.classList.remove("active");
+  loading.classList.remove("active");
   items.forEach((el, i) => {
     setTimeout(() => {
       el.classList.add("show");
@@ -1035,16 +1104,11 @@ async function processAndRenderAll(data, isLoad) {
   VIEW_DATA = data;
   if (!data?.length) return;
 
-  const t0 = performance.now();
-
   GROUPED = await processCRMData(data);
-  if (isLoad) {
-    ACCOUNT_DATA = GROUPED;
-  }
-  console.log(`🧩 Data processed in ${(performance.now() - t0).toFixed(1)}ms`);
+  if (isLoad) ACCOUNT_DATA = data;
 
-  queueMicrotask(() => renderChartsSmoothly(GROUPED));
-  requestAnimationFrame(() => {
+  scheduleIdle(() => renderChartsSmoothly(GROUPED), 80);
+  scheduleRAF(() => {
     renderLeadTable(data);
     renderFilterOptions(GROUPED);
     renderSaleFilter(GROUPED);
@@ -1053,9 +1117,7 @@ async function processAndRenderAll(data, isLoad) {
 
 // 🧠 Hàm render chart chia nhỏ batch – không chặn main thread
 function renderChartsSmoothly(GROUPED) {
-  console.log(GROUPED);
-
-  const chartTasks = [
+  const tasks = [
     () => renderLeadTrendChart(GROUPED),
     () => renderLeadQualityMeter(GROUPED),
     () => renderCampaignPieChart(GROUPED),
@@ -1066,40 +1128,24 @@ function renderChartsSmoothly(GROUPED) {
     () => renderLeadTagChart(GROUPED),
     () => renderDegreeChart(GROUPED),
   ];
-
-  let idx = 0;
-  const total = chartTasks.length;
-
-  const next = () => {
-    if (idx >= total) return;
-    const task = chartTasks[idx++];
-
-    // Dùng requestIdleCallback nếu có, fallback sang RAF
-    if ("requestIdleCallback" in window) {
-      requestIdleCallback(
-        () => {
-          task();
-          requestAnimationFrame(next);
-        },
-        { timeout: 200 }
-      );
-    } else {
-      setTimeout(() => {
-        task();
-        next();
-      }, 40);
-    }
+  let i = 0;
+  const run = () => {
+    if (i >= tasks.length) return;
+    const t = tasks[i++];
+    scheduleIdle(() => {
+      t();
+      scheduleRAF(run);
+    });
   };
-
-  // ⚡ Start nhanh chart đầu tiên
   queueMicrotask(() => {
-    chartTasks[0]?.();
-    idx = 1;
-    next();
+    tasks[0]?.();
+    i = 1;
+    run();
   });
 }
+
 function processCRMData(data) {
-  if (!data?.length)
+  if (!data?.length) {
     return {
       byDate: Object.create(null),
       byCampaign: Object.create(null),
@@ -1109,8 +1155,8 @@ function processCRMData(data) {
       byOrg: Object.create(null),
       tagFrequency: Object.create(null),
     };
+  }
 
-  // ⚙️ Chuẩn bị cache & biến cục bộ cho tốc độ cao
   const r = {
     byDate: Object.create(null),
     byCampaign: Object.create(null),
@@ -1126,18 +1172,15 @@ function processCRMData(data) {
   const getTagsArrayLocal = getTagsArray;
   const getPrimaryTagLocal = getPrimaryTag;
 
-  // ⚡ Duyệt nhanh — dùng biến tạm, hạn chế truy cập sâu & GC
-  const BATCH = 3000;
+  const BATCH = 4000;
   let i = 0;
 
-  function processBatch() {
+  const work = () => {
     const end = Math.min(i + BATCH, len);
     for (; i < end; i++) {
       const lead = data[i];
-      const created = lead.CreatedDate;
-      const date = created ? created.slice(0, 10) : "Unknown";
 
-      // === Chuẩn bị dữ liệu nhanh ===
+      const date = lead.CreatedDate ? lead.CreatedDate.slice(0, 10) : "Unknown";
       const tags = getTagsArrayLocal(lead.TagIDText);
       let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
       if (mainTag === "Qualified") mainTag = "Needed";
@@ -1148,34 +1191,24 @@ function processCRMData(data) {
       const campaign = lead.CustomField13Text || "Campaign";
       const source = lead.CustomField14Text || "Source";
       const medium = lead.CustomField15Text || "Medium";
+      const ownerKey = (lead.OwnerIDText || "No Owner")
+        .replace(/\s*\(NV.*?\)\s*/gi, "")
+        .trim();
 
-      const ownerFull = lead.OwnerIDText || "No Owner";
-      const ownerKey = ownerFull.replace(/\s*\(NV.*?\)\s*/gi, "").trim();
+      for (let j = 0; j < tags.length; j++)
+        r.tagFrequency[tags[j]] = (r.tagFrequency[tags[j]] || 0) + 1;
 
-      // ==== 1️⃣ tagFrequency ====
-      const tagLen = tags.length;
-      for (let j = 0; j < tagLen; j++) {
-        const tag = tags[j];
-        r.tagFrequency[tag] = (r.tagFrequency[tag] || 0) + 1;
-      }
+      const d = (r.byDate[date] ||= { total: 0 });
+      d.total++;
+      d[mainTag] = (d[mainTag] || 0) + 1;
 
-      // ==== 2️⃣ byDate ====
-      const dateObj = (r.byDate[date] ||= { total: 0 });
-      dateObj.total++;
-      dateObj[mainTag] = (dateObj[mainTag] || 0) + 1;
-
-      // ==== 3️⃣ byTag ====
       (r.byTag[mainTag] ||= []).push(lead);
-
-      // ==== 4️⃣ byTagAndDate ====
-      const tagMap = (r.byTagAndDate[mainTag] ||= Object.create(null));
-      (tagMap[date] ||= []).push(lead);
-
-      // ==== 5️⃣ byCampaign ====
+      ((r.byTagAndDate[mainTag] ||= Object.create(null))[date] ||= []).push(
+        lead
+      );
       (((r.byCampaign[campaign] ||= Object.create(null))[source] ||=
         Object.create(null))[medium] ||= []).push(lead);
 
-      // ==== 6️⃣ byOwner ====
       const ownerObj = (r.byOwner[ownerKey] ||= {
         total: 0,
         tags: Object.create(null),
@@ -1183,12 +1216,10 @@ function processCRMData(data) {
       });
       ownerObj.total++;
       ownerObj.leads.push(lead);
+      const ot = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
+      ot.count++;
+      ot.leads.push(lead);
 
-      const ownerTag = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
-      ownerTag.count++;
-      ownerTag.leads.push(lead);
-
-      // ==== 7️⃣ byOrg ====
       const orgObj = (r.byOrg[org] ||= {
         total: 0,
         tags: Object.create(null),
@@ -1200,16 +1231,10 @@ function processCRMData(data) {
       (orgObj.owners[ownerKey] ||= []).push(lead);
       (orgObj.byDate[date] ||= []).push(lead);
     }
+    if (i < len) scheduleIdle(work, 60);
+  };
 
-    if (i < len) {
-      // 🔹 Nhường thread cho browser trước khi xử lý batch tiếp theo
-      setTimeout(processBatch, 0);
-    }
-  }
-
-  // 🚀 Bắt đầu xử lý theo batch (tránh block UI)
-  processBatch();
-
+  work();
   return r;
 }
 
@@ -1264,73 +1289,65 @@ function renderSaleFilter(grouped) {
 // RENDER FILTERS
 // ============================
 function renderFilterOptions(grouped) {
-  const campaignSelect = document.querySelector(
-    ".dom_select.campaign ul.dom_select_show"
-  );
-  const sourceSelect = document.querySelector(
-    ".dom_select.source ul.dom_select_show"
-  );
-  const mediumSelect = document.querySelector(
-    ".dom_select.medium ul.dom_select_show"
-  );
-
+  const campaignSelect = qsc(".dom_select.campaign ul.dom_select_show");
+  const sourceSelect = qsc(".dom_select.source ul.dom_select_show");
+  const mediumSelect = qsc(".dom_select.medium ul.dom_select_show");
+  if (!campaignSelect || !sourceSelect || !mediumSelect) return;
   campaignSelect.innerHTML = "";
   sourceSelect.innerHTML = "";
   mediumSelect.innerHTML = "";
 
-  // ✅ 1️⃣ Campaign luôn render theo dữ liệu gốc (RAW_DATA)
-  const groupedAll = ACCOUNT_DATA;
-  for (const [campaign, sources] of Object.entries(groupedAll.byCampaign)) {
+  // Campaign: luôn từ ACCOUNT_DATA (không đổi logic)
+  const fragCamp = document.createDocumentFragment();
+  for (const [campaign, sources] of Object.entries(
+    ACCOUNT_DATA.byCampaign || {}
+  )) {
     const total = Object.values(sources)
       .flatMap((s) => Object.values(s))
       .flat().length;
     const li = document.createElement("li");
-    li.innerHTML = `
-        <span class="radio_box"></span>
-       <span> <span>${campaign}</span>
-        <span class="count">${total}</span></span>`;
+    li.innerHTML = `<span class="radio_box"></span><span><span>${campaign}</span><span class="count">${total}</span></span>`;
     li.onclick = () => applyFilter("campaign", campaign);
-    campaignSelect.appendChild(li);
+    fragCamp.appendChild(li);
   }
+  campaignSelect.appendChild(fragCamp);
 
-  // ✅ 2️⃣ Source & Medium chỉ render từ dữ liệu hiện tại (GROUPED)
-  // --- Sources ---
-  const sourcesMap = {};
-  for (const sources of Object.values(grouped.byCampaign)) {
+  // Source: từ grouped hiện tại
+  const sourcesMap = Object.create(null);
+  for (const sources of Object.values(grouped.byCampaign || {})) {
     for (const [src, mediums] of Object.entries(sources)) {
       sourcesMap[src] =
         (sourcesMap[src] || 0) + Object.values(mediums).flat().length;
     }
   }
+  const fragSrc = document.createDocumentFragment();
   for (const [src, count] of Object.entries(sourcesMap)) {
     const li = document.createElement("li");
-    li.innerHTML = `
-        <span class="radio_box"></span>
-        <span> <span>${src}</span>
-        <span class="count">${count}</span></span>`;
+    li.innerHTML = `<span class="radio_box"></span><span><span>${src}</span><span class="count">${count}</span></span>`;
     li.onclick = () => applyFilter("source", src);
-    sourceSelect.appendChild(li);
+    fragSrc.appendChild(li);
   }
+  sourceSelect.appendChild(fragSrc);
 
-  // --- Mediums ---
-  const mediumMap = {};
-  for (const sources of Object.values(grouped.byCampaign)) {
+  // Medium
+  const mediumMap = Object.create(null);
+  for (const sources of Object.values(grouped.byCampaign || {})) {
     for (const mediums of Object.values(sources)) {
       for (const [m, leads] of Object.entries(mediums)) {
         mediumMap[m] = (mediumMap[m] || 0) + leads.length;
       }
     }
   }
+  const fragMed = document.createDocumentFragment();
   for (const [m, count] of Object.entries(mediumMap)) {
     const li = document.createElement("li");
-    li.innerHTML = `
-        <span class="radio_box"></span>
-        <span> <span>${m}</span>
-        <span class="count">${count}</span></span>`;
+    li.innerHTML = `<span class="radio_box"></span><span><span>${m}</span><span class="count">${count}</span></span>`;
     li.onclick = () => applyFilter("medium", m);
-    mediumSelect.appendChild(li);
+    fragMed.appendChild(li);
   }
+  mediumSelect.appendChild(fragMed);
 }
+
 function setupQualityFilter() {
   const qualitySelect = document.querySelector(".dom_select.quality");
   if (!qualitySelect) return;
@@ -1518,8 +1535,6 @@ function setActiveRadio(type, value) {
 // ============================
 function applyFilter(type, value) {
   currentFilter[type] = value;
-
-  // Reset filter con nếu đổi filter cha
   if (type === "campaign") {
     currentFilter.source = null;
     currentFilter.medium = null;
@@ -1528,66 +1543,51 @@ function applyFilter(type, value) {
     currentFilter.medium = null;
   }
 
-  // Cập nhật UI hiển thị
-  document.querySelector(`.dom_select.${type} .dom_selected`).textContent =
-    value;
+  setText(qsc(`.dom_select.${type} .dom_selected`), value);
   setActiveRadio(type, value);
-  setSourceActive();
-  // 1️⃣ Lọc lại dữ liệu theo bộ lọc hiện tại
+  setSourceActive?.();
+
   const filtered = filterLeadsBySelection(RAW_DATA);
-
-  // 2️⃣ Process lại với dữ liệu đã lọc
-
-  processAndRenderAll(filtered);
-  // 3️⃣ Render lại các bộ lọc (con)
-
-  // 4️⃣ Log kết quả / render bảng nếu cần
-  console.log("✅ Filtered & regrouped data:", GROUPED);
+  scheduleRAF(() => processAndRenderAll(filtered));
 }
 
 // ============================
 // FILTER DATA LOGIC
 // ============================
 function setupLeadSearch() {
-  const input = document.querySelector(".dom_search");
-  const btn = document.getElementById("find_data");
-
+  const input = qsc(".dom_search");
+  const btn = qsc("#find_data");
   if (!input || !btn) return;
 
-  btn.onclick = () => applyLeadSearch();
-  input.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") applyLeadSearch();
-  });
-
-  function applyLeadSearch() {
+  const run = () => {
     const keyword = input.value.trim().toLowerCase();
     if (!keyword) {
-      // ❌ Nếu trống → render lại toàn bộ
       renderLeadTable(RAW_DATA);
       return;
     }
-
-    // ✅ Lọc theo số điện thoại hoặc tên sale
-    const filtered = RAW_DATA.filter((lead) => {
-      const phone = lead.Mobile?.toLowerCase() || "";
-      const owner = lead.OwnerIDText?.toLowerCase() || "";
+    const filtered = RAW_DATA.filter((l) => {
+      const phone = (l.Mobile || "").toLowerCase();
+      const owner = (l.OwnerIDText || "").toLowerCase();
       return phone.includes(keyword) || owner.includes(keyword);
     });
-
-    // 🧮 Render lại bảng với dữ liệu lọc
     renderLeadTable(filtered);
-
-    // Nếu không có kết quả thì báo
-    if (filtered.length === 0) {
-      const container = document.querySelector(".dom_table_box");
-      if (container)
-        container.innerHTML = `
-            <div class="dom_table_container empty">
-              <p>Không tìm thấy dữ liệu phù hợp cho "<b>${keyword}</b>"</p>
-            </div>
-          `;
+    if (!filtered.length) {
+      const c = qsc(".dom_table_box");
+      if (c)
+        c.innerHTML = `<div class="dom_table_container empty"><p>Không tìm thấy dữ liệu phù hợp cho "<b>${keyword}</b>"</p></div>`;
     }
-  }
+  };
+
+  const debounced = debounce(run, 180);
+  btn.onclick = run;
+  input.addEventListener("input", debounced, { passive: true });
+  input.addEventListener(
+    "keypress",
+    (e) => {
+      if (e.key === "Enter") run();
+    },
+    { passive: true }
+  );
 }
 
 function setupLeadTagChartBySale(grouped) {
@@ -1682,15 +1682,12 @@ function setupLeadTagChartBySale(grouped) {
 function renderLeadTagChartBySale(grouped, saleName) {
   const ctx = document.getElementById("leadTagChartbySale");
   if (!ctx) return;
-
-  // 🔍 Tìm sale tương ứng nhanh hơn (dùng cache tên đã cắt)
-  const matchedKey = Object.keys(grouped.byOwner).find(
+  const key = Object.keys(grouped.byOwner || {}).find(
     (k) => k.replace(/\s*\(NV.*?\)/gi, "").trim() === saleName
   );
-  const ownerData = grouped.byOwner[matchedKey];
+  const ownerData = key ? grouped.byOwner[key] : null;
   if (!ownerData) return;
 
-  // 🧭 Thứ tự cố định
   const tagOrder = [
     "Considering",
     "Needed",
@@ -1700,10 +1697,8 @@ function renderLeadTagChartBySale(grouped, saleName) {
     "New",
     "Untag",
   ];
-
-  // 🧮 Chuẩn bị dữ liệu gọn, không map/filter lồng nhau
-  const labels = [];
-  const values = [];
+  const labels = [],
+    values = [];
   for (let i = 0; i < tagOrder.length; i++) {
     const tag = tagOrder[i];
     const count = ownerData.tags?.[tag]?.count || 0;
@@ -1712,33 +1707,23 @@ function renderLeadTagChartBySale(grouped, saleName) {
       values.push(count);
     }
   }
-
   const maxValue = Math.max(...values);
   const barColors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
 
-  // 🔧 Nếu chart đã có → chỉ update khi data khác
-  if (window.leadTagChartBySaleInstance) {
-    const chart = window.leadTagChartBySaleInstance;
-    const ds = chart.data.datasets[0];
-
-    // So sánh nhanh → nếu không đổi thì khỏi update
-    if (
-      arraysEqual(chart.data.labels, labels) &&
-      arraysEqual(ds.data, values)
-    ) {
+  const inst = window.leadTagChartBySaleInstance;
+  if (inst) {
+    const ds = inst.data.datasets[0];
+    if (arraysEqual(inst.data.labels, labels) && arraysEqual(ds.data, values))
       return;
-    }
-
-    chart.data.labels = labels;
+    inst.data.labels = labels;
     ds.data = values;
     ds.backgroundColor = barColors;
     ds.borderColor = barColors;
     ds.label = `Leads by Tag (${saleName})`;
-    chart.update("active"); // ⚡ update không animation
+    inst.update("active");
     return;
   }
 
-  // 🚀 Tạo chart lần đầu (animation cực nhẹ)
   window.leadTagChartBySaleInstance = new Chart(ctx, {
     type: "bar",
     data: {
@@ -1759,13 +1744,11 @@ function renderLeadTagChartBySale(grouped, saleName) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 300, easing: "easeOutQuad" }, // ⚙️ mượt nhẹ mà vẫn nhanh
+      animation: { duration: 300, easing: "easeOutQuad" },
       plugins: {
         legend: { display: false },
         tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
-          },
+          callbacks: { label: (c) => `${c.parsed.y.toLocaleString()} leads` },
         },
         datalabels: {
           anchor: "end",
@@ -1779,34 +1762,27 @@ function renderLeadTagChartBySale(grouped, saleName) {
         x: {
           grid: {
             display: true,
-            color: "rgb(240, 240, 240)",
+            color: "rgb(240,240,240)",
             drawTicks: false,
             drawBorder: false,
           },
-          ticks: { font: { size: 12 }, color: "rgb(85, 85, 85)" },
+          ticks: { font: { size: 12 }, color: "rgb(85,85,85)" },
         },
         y: {
           beginAtZero: true,
           ticks: {
             font: { size: 11 },
-            color: "rgb(102, 102, 102)",
+            color: "rgb(102,102,102)",
             stepSize: Math.ceil(maxValue / 4) || 1,
             callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
           },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
-          grid: { color: "rgb(240, 240, 240)" },
+          afterDataLimits: (s) => (s.max *= 1.1),
+          grid: { color: "rgb(240,240,240)" },
         },
       },
     },
     plugins: [ChartDataLabels],
   });
-
-  // ⚙️ So sánh mảng nhanh
-  function arraysEqual(a, b) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-    return true;
-  }
 }
 
 function filterLeadsBySelection(data) {
@@ -2182,14 +2158,16 @@ function setupTimeDropdown() {
 
       const range = getDateRange(type);
       dateText.textContent = formatDisplayDate(range.from, range.to);
-
       // ✅ Fetch lại theo ngày
+      const loading = document.querySelector(".loading");
+      loading.classList.add("active");
       RAW_DATA = await fetchLeads(range.from, range.to);
       // ✅ Reset account về “Total Data”
       localStorage.setItem("selectedAccount", "Total Data");
       setActiveAccountUI("Total Data");
       processAndRenderAll(RAW_DATA, true);
       list.classList.remove("active");
+      loading.classList.remove("active");
     };
   });
 
@@ -2213,8 +2191,9 @@ function setupTimeDropdown() {
 
     selectedLabel.textContent = "Custom Date";
     dateText.textContent = formatDisplayDate(start, end);
-
     // ✅ Fetch lại
+    const loading = document.querySelector(".loading");
+    loading.classList.add("active");
     RAW_DATA = await fetchLeads(start, end);
     processAndRenderAll(RAW_DATA, true);
     // ✅ Reset account về “Total Data”
@@ -2222,6 +2201,7 @@ function setupTimeDropdown() {
     setActiveAccountUI("Total Data");
     list.classList.remove("active");
     customBox.classList.remove("show");
+    loading.classList.remove("active");
   };
 
   // 🔹 Đóng khi click ra ngoài
@@ -2230,7 +2210,6 @@ function setupTimeDropdown() {
   });
 }
 function setupDropdowns() {
-  // ✅ các selector tái sử dụng
   const showSelectors =
     ".dom_select.saleperson_detail .dom_select_show, .dom_select.campaign .dom_select_show, .dom_select.source .dom_select_show, .dom_select.medium .dom_select_show";
   const containerSelectors =
@@ -2240,65 +2219,41 @@ function setupDropdowns() {
   const itemSelectors =
     ".dom_select.saleperson_detail .dom_select_show li, .dom_select.campaign .dom_select_show li, .dom_select.source .dom_select_show li, .dom_select.medium .dom_select_show li";
 
-  // 🔹 Đóng tất cả dropdown show trong nhóm
   document
     .querySelectorAll(showSelectors)
     .forEach((u) => u.classList.remove("active"));
-
-  // 🔹 Chỉ chọn đúng các dropdown container cần setup
   const selects = document.querySelectorAll(containerSelectors);
-
-  // flag tạm khi vừa chọn item
   let justSelected = false;
 
   selects.forEach((sel) => {
-    const toggle = sel.querySelector(".flex");
-    const list = sel.querySelector(".dom_select_show");
+    const toggle = sel.querySelector(".flex"),
+      list = sel.querySelector(".dom_select_show");
     if (!toggle || !list) return;
-
-    // ⛔ Chặn gán trùng listener trên toggle
     if (toggle.dataset.dropdownBound) return;
     toggle.dataset.dropdownBound = "1";
-
     toggle.addEventListener("click", (e) => {
       e.stopPropagation();
-
-      // Nếu vừa chọn item thì bỏ qua (tránh bật lại)
       if (justSelected) return;
-
-      // 🔹 Đóng dropdown khác trong nhóm
       document.querySelectorAll(activeGroupSelectors).forEach((u) => {
         if (u !== list) u.classList.remove("active");
       });
-
-      // 🔹 Mở/tắt dropdown hiện tại
       list.classList.toggle("active");
     });
   });
 
-  // 🔹 Global click (chỉ bind 1 lần)
   if (!window.__dropdownGlobalBound) {
     window.__dropdownGlobalBound = true;
-
     document.addEventListener("click", (e) => {
-      // Nếu vừa chọn item thì bỏ qua (tránh bật lại)
       if (justSelected) return;
-
       const clickedItem = e.target.closest(itemSelectors);
-
       if (clickedItem) {
-        // Mark và reset sau 200ms để tránh race với toggle
         justSelected = true;
         setTimeout(() => (justSelected = false), 200);
-
-        // Đóng tất cả dropdown active trong nhóm
         document
           .querySelectorAll(activeGroupSelectors)
           .forEach((u) => u.classList.remove("active"));
         return;
       }
-
-      // Nếu click ngoài nhóm dropdown -> đóng hết trong nhóm
       if (!e.target.closest(containerSelectors)) {
         document
           .querySelectorAll(activeGroupSelectors)
@@ -2313,53 +2268,39 @@ function renderLeadTagChart(grouped) {
   const top_tag = document.getElementById("top_tag");
   if (!ctx || !grouped?.byTag) return;
 
-  // ⚙️ Gom dữ liệu siêu nhanh (cache & tránh tính thừa)
   const entries = Object.entries(grouped.byTag);
   if (!entries.length) return;
 
-  const labels = [];
-  const values = [];
-  let maxIndex = 0;
-  let maxValue = 0;
-
+  const labels = [],
+    values = [];
+  let maxIndex = 0,
+    maxValue = 0;
   for (let i = 0; i < entries.length; i++) {
     const [tag, arr] = entries[i];
-    const count = arr.length;
+    const c = arr.length;
     labels.push(tag);
-    values.push(count);
-    if (count > maxValue) {
-      maxValue = count;
+    values.push(c);
+    if (c > maxValue) {
+      maxValue = c;
       maxIndex = i;
     }
   }
-
-  // 🎨 Tô màu: cột lớn nhất vàng
-  const barColors = new Array(values.length).fill("#d9d9d9");
-  barColors[maxIndex] = "#ffa900";
-
-  // 🏷️ Gán top tag nhanh
+  const barColors = values.map((_, i) =>
+    i === maxIndex ? "#ffa900" : "#d9d9d9"
+  );
   if (top_tag) top_tag.textContent = labels[maxIndex] || "";
 
-  // ⚡ Nếu chart đã tồn tại → chỉ update khi data khác
-  const chart = window.leadTagChartInstance;
-  if (chart) {
-    const oldData = chart.data.datasets[0].data;
-    // tránh re-render vô ích
-    if (
-      oldData.length === values.length &&
-      oldData.every((v, i) => v === values[i])
-    )
-      return;
-
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = barColors;
-    chart.data.datasets[0].borderColor = barColors;
-    chart.update();
+  const inst = window.leadTagChartInstance;
+  if (inst) {
+    if (arraysEqual(inst.data.datasets[0].data, values)) return;
+    inst.data.labels = labels;
+    inst.data.datasets[0].data = values;
+    inst.data.datasets[0].backgroundColor = barColors;
+    inst.data.datasets[0].borderColor = barColors;
+    inst.update();
     return;
   }
 
-  // 🚀 Tạo chart mới
   window.leadTagChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
@@ -2378,19 +2319,11 @@ function renderLeadTagChart(grouped) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-
-      // ⚡ Animation cực nhanh
-      animation: {
-        duration: 400,
-        easing: "easeOutCubic",
-      },
-
+      animation: { duration: 400, easing: "easeOutCubic" },
       plugins: {
         legend: { display: false },
         tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
-          },
+          callbacks: { label: (c) => `${c.parsed.y.toLocaleString()} leads` },
         },
         datalabels: {
           anchor: "end",
@@ -2401,10 +2334,7 @@ function renderLeadTagChart(grouped) {
       },
       scales: {
         x: {
-          grid: {
-            display: false,
-            drawBorder: false,
-          },
+          grid: { display: false, drawBorder: false },
           ticks: { font: { size: 12 }, color: "#555" },
         },
         y: {
@@ -2415,7 +2345,7 @@ function renderLeadTagChart(grouped) {
             stepSize: Math.ceil(maxValue / 4) || 1,
             callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
           },
-          afterDataLimits: (scale) => (scale.max *= 1.05),
+          afterDataLimits: (s) => (s.max *= 1.05),
           grid: { color: "rgba(0,0,0,0.04)" },
         },
       },
@@ -2642,12 +2572,11 @@ document.addEventListener("click", (e) => {
   if (backBtn) {
     const dashboard = document.querySelector(".dom_dashboard");
     if (dashboard) {
-      console.log("remove");
       dashboard.classList.remove("sale_detail_ads", "sale_detail");
-      if (ORIGINAL_DATA) processAndRenderAll(ORIGINAL_DATA);
+      processAndRenderAll(ACCOUNT_DATA); // 🔁 quay về dataset hiện tại
     }
     setSourceActive();
-    return; // ngăn xử lý tiếp
+    return;
   }
 
   // --- 2️⃣ Mở AI Report ---
@@ -2655,15 +2584,17 @@ document.addEventListener("click", (e) => {
   if (aiBtn) {
     const panel = document.querySelector(".dom_ai_report");
     if (!panel) return;
-    
+
     // Gọi báo cáo
     generateAdvancedReport(CRM_DATA);
-    
+
     // Kích hoạt panel
     panel.classList.add("active");
-    
+
     // Scroll panel lên đầu
-    const dom_ai_report_content = document.querySelector(".dom_ai_report_content");
+    const dom_ai_report_content = document.querySelector(
+      ".dom_ai_report_content"
+    );
     dom_ai_report_content.scrollTop = 0;
     // Hoặc nếu muốn cuộn cả body theo panel: panel.scrollIntoView({ behavior: "smooth" });
 
@@ -2685,7 +2616,9 @@ document.addEventListener("click", (e) => {
     generateAdvancedCompareReport();
     // Kích hoạt panel
     panel.classList.add("active");
-    const dom_ai_report_content = document.querySelector(".dom_ai_report_content");
+    const dom_ai_report_content = document.querySelector(
+      ".dom_ai_report_content"
+    );
     dom_ai_report_content.scrollTop = 0;
     return; // chặn event tiếp
   }
@@ -2701,7 +2634,9 @@ document.addEventListener("click", (e) => {
     // Kích hoạt panel
     panel.classList.add("active");
 
-    const dom_ai_report_content = document.querySelector(".dom_ai_report_content");
+    const dom_ai_report_content = document.querySelector(
+      ".dom_ai_report_content"
+    );
     dom_ai_report_content.scrollTop = 0;
 
     return; // chặn event tiếp
@@ -2924,63 +2859,46 @@ function renderCampaignPieChart(grouped) {
 }
 function renderLeadSaleChart(grouped, tagFilter = "Needed") {
   if (!grouped?.byOwner) return;
-
   const ctx = document.getElementById("leadSale");
   if (!ctx) return;
 
-  // 🧮 Chuẩn bị dữ liệu (dùng mảng tĩnh, tránh push nhiều lần)
   const entries = Object.entries(grouped.byOwner);
   const labels = new Array(entries.length);
   const totalCounts = new Array(entries.length);
   const tagCounts = new Array(entries.length);
 
   for (let i = 0; i < entries.length; i++) {
-    const [owner, ownerData] = entries[i];
+    const [owner, data] = entries[i];
     labels[i] = owner.replace(/\s*\(NV.*?\)/gi, "").trim();
-    totalCounts[i] = ownerData.total || 0;
-    tagCounts[i] = ownerData.tags?.[tagFilter]?.count || 0;
+    totalCounts[i] = data.total || 0;
+    tagCounts[i] = data.tags?.[tagFilter]?.count || 0;
   }
 
   const maxValue = Math.max(...totalCounts, ...tagCounts);
-  const ctx2d = ctx.getContext("2d");
+  const tagColor = "rgba(38,42,83,0.8)",
+    totalColor = "rgba(255,171,0,0.8)";
 
-  const tagColor = "rgba(38, 42, 83, 0.8)";
-  const totalColor = "rgba(255, 171, 0, 0.8)";
-
-  // 🔁 Nếu chart đã có → update nhanh, không re-render toàn bộ
-  if (window.leadSaleChartInstance) {
-    const chart = window.leadSaleChartInstance;
-    const ds0 = chart.data.datasets[0];
-    const ds1 = chart.data.datasets[1];
-
-    // ✅ Chỉ cập nhật nếu dữ liệu thay đổi (tránh trigger animation vô ích)
+  const inst = window.leadSaleChartInstance;
+  if (inst) {
     let changed = false;
-    if (
-      chart.data.labels.length !== labels.length ||
-      chart.data.labels.some((l, i) => l !== labels[i])
-    ) {
-      chart.data.labels = labels;
+    if (!arraysEqual(inst.data.labels, labels)) {
+      inst.data.labels = labels;
       changed = true;
     }
-    if (!arraysEqual(ds0.data, totalCounts)) {
-      ds0.data = totalCounts;
+    if (!arraysEqual(inst.data.datasets[0].data, totalCounts)) {
+      inst.data.datasets[0].data = totalCounts;
       changed = true;
     }
-    if (!arraysEqual(ds1.data, tagCounts)) {
-      ds1.data = tagCounts;
-      ds1.label = `${tagFilter} Leads`;
+    if (!arraysEqual(inst.data.datasets[1].data, tagCounts)) {
+      inst.data.datasets[1].data = tagCounts;
+      inst.data.datasets[1].label = `${tagFilter} Leads`;
       changed = true;
     }
-
-    if (changed) {
-      // 🚀 Tắt animation khi update để tăng tốc
-      chart.update("active");
-    }
+    if (changed) inst.update("active");
     return;
   }
 
-  // 🚀 Tạo chart lần đầu
-  window.leadSaleChartInstance = new Chart(ctx2d, {
+  window.leadSaleChartInstance = new Chart(ctx.getContext("2d"), {
     type: "bar",
     data: {
       labels,
@@ -3006,19 +2924,19 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: false, // ⚙️ tắt animation khởi tạo → load cực nhanh
+      animation: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { position: "top", align: "end" },
         tooltip: {
           callbacks: {
-            label: (ctx) => {
-              const total = totalCounts[ctx.dataIndex] || 0;
-              const count = ctx.parsed.y || 0;
-              const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+            label: (c) => {
+              const total = totalCounts[c.dataIndex] || 0,
+                cnt = c.parsed.y || 0;
+              const pct = total > 0 ? ((cnt / total) * 100).toFixed(1) : 0;
               return `${
-                ctx.dataset.label
-              }: ${count.toLocaleString()} leads (${pct}%)`;
+                c.dataset.label
+              }: ${cnt.toLocaleString()} leads (${pct}%)`;
             },
           },
         },
@@ -3032,32 +2950,18 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
       scales: {
         x: {
           grid: { color: "rgba(0,0,0,0.05)" },
-          ticks: {
-            color: "#444",
-            autoSkip: true,
-            maxTicksLimit: 8,
-          },
+          ticks: { color: "#444", autoSkip: true, maxTicksLimit: 8 },
         },
         y: {
           beginAtZero: true,
           grid: { color: "rgba(0,0,0,0.05)" },
-          ticks: {
-            color: "#666",
-            stepSize: Math.ceil(maxValue / 4) || 1,
-          },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
+          ticks: { color: "#666", stepSize: Math.ceil(maxValue / 4) || 1 },
+          afterDataLimits: (s) => (s.max *= 1.1),
         },
       },
     },
     plugins: [ChartDataLabels],
   });
-
-  // 🔧 Hàm so sánh mảng nhanh
-  function arraysEqual(a, b) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-    return true;
-  }
 }
 
 function maskEmail(email) {
@@ -3079,10 +2983,7 @@ function renderLeadTable(leads) {
   if (!container) return;
 
   if (!Array.isArray(leads) || leads.length === 0) {
-    container.innerHTML = `
-      <div class="dom_table_container empty">
-        <p>No data</p>
-      </div>`;
+    container.innerHTML = `<div class="dom_table_container empty"><p>No data</p></div>`;
     return;
   }
 
@@ -3099,24 +3000,17 @@ function renderLeadTable(leads) {
     "Description",
   ];
 
-  // 🧱 Khởi tạo bảng
   container.innerHTML = `
     <div class="dom_table_container scrollable">
       <table id="main_table">
-        <thead>
-          <tr>${headers
-            .map((h) => `<th class="sortable">${h}</th>`)
-            .join("")}</tr>
-        </thead>
+        <thead><tr>${headers
+          .map((h) => `<th class="sortable">${h}</th>`)
+          .join("")}</tr></thead>
         <tbody></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3">
-              View <span class="loaded_count">0</span> / ${leads.length.toLocaleString()} leads
-            </td>
-            <td colspan="${headers.length - 3}"></td>
-          </tr>
-        </tfoot>
+        <tfoot><tr>
+          <td colspan="3">View <span class="loaded_count">0</span> / ${leads.length.toLocaleString()} leads</td>
+          <td colspan="${headers.length - 3}"></td>
+        </tr></tfoot>
       </table>
     </div>`;
 
@@ -3125,79 +3019,74 @@ function renderLeadTable(leads) {
   const wrapper = container.querySelector(".dom_table_container");
   const thList = container.querySelectorAll("thead th");
 
-  // ⚙️ Biến trạng thái
-  let index = 0;
-  const INITIAL_CHUNK = 20;
-  const SCROLL_CHUNK = 20;
-  let isLoading = false;
-  let sortAsc = false; // 🟡 Mặc định: mới nhất ở trên (↓)
+  let index = 0,
+    isLoading = false,
+    sortAsc = false;
+  const INITIAL_CHUNK = 20,
+    SCROLL_CHUNK = 20;
 
-  // 🔹 Sắp xếp ngay từ đầu
-  leads.sort((a, b) => {
-    const da = new Date(a.CreatedDate || 0).getTime();
-    const db = new Date(b.CreatedDate || 0).getTime();
-    return sortAsc ? da - db : db - da;
-  });
+  // 🔹 Helper: format date
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("vi-VN") : "-");
 
-  // 🧩 Hàm render batch
+  // 🔹 Helper: chỉ hiển thị 6 số cuối
+  const maskPhone = (phone = "") => {
+    const clean = String(phone).replace(/\D/g, "");
+    if (clean.length <= 6) return clean;
+    return "••••" + clean.slice(-6);
+  };
+
+  // 🔹 Helper: format tag list
+  const fmtTags = (tagText = "") => {
+    if (!tagText.trim()) return "-";
+    return tagText
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((tag) => {
+        const cls = /Needed/i.test(tag)
+          ? "tag_needed"
+          : /Considering/i.test(tag)
+          ? "tag_considering"
+          : /Bad timing/i.test(tag)
+          ? "tag_bad"
+          : /Unqualified/i.test(tag)
+          ? "tag_unqualified"
+          : /Junk/i.test(tag)
+          ? "tag_junk"
+          : "tag_other";
+        return `<span class="tag_chip ${cls}">${tag}</span>`;
+      })
+      .join(" ");
+  };
+
+  // 🔹 Sort theo ngày (mặc định mới nhất trước)
+  leads.sort(
+    (a, b) =>
+      (sortAsc ? 1 : -1) *
+      (new Date(a.CreatedDate || 0) - new Date(b.CreatedDate || 0))
+  );
+
+  // 🔹 Render từng phần
   function renderChunk(count) {
     const end = Math.min(index + count, leads.length);
     let html = "";
 
     for (let i = index; i < end; i++) {
       const l = leads[i];
-      const {
-        CreatedDate,
-        LeadName,
-        Mobile,
-        OwnerIDText,
-        TagIDText,
-        CustomField13Text,
-        CustomField14Text,
-        CustomField15Text,
-        CustomField16Text,
-        Description,
-      } = l;
-
-      const date = CreatedDate
-        ? new Date(CreatedDate).toLocaleDateString("vi-VN")
-        : "-";
-
-        let tagHtml = "-";
-        if (TagIDText?.trim()) {
-          tagHtml = TagIDText.split(",")
-            .map((t) => t.trim())
-            .filter(Boolean)
-            .map((tag) => {
-              const tagClass = /Needed/i.test(tag)
-                ? "tag_needed"
-                : /Considering/i.test(tag)
-                ? "tag_considering"
-                : /Bad timing/i.test(tag)
-                ? "tag_bad"
-                : /Unqualified/i.test(tag)
-                ? "tag_unqualified"
-                : /Junk/i.test(tag)
-                ? "tag_junk"
-                : "tag_other";
-              return `<span class="tag_chip ${tagClass}">${tag}</span>`;
-            })
-            .join(" ");
-        }
-        
-
       html += `
         <tr data-id="${i}">
-          <td>${date}</td>
-          <td>${LeadName || "-"}</td>
-          <td><i class="fa-solid fa-phone table_phone"></i> ${Mobile}</td>
-          <td>${OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
-          <td>${tagHtml}</td>
-          <td>${CustomField13Text || "-"}</td>
-          <td>${CustomField14Text || "-"}</td>
-          <td>${CustomField15Text || "-"}</td>
-          <td>${CustomField16Text || "-"}</td>
-          <td>${Description || "-"}</td>
+          <td>${fmtDate(l.CreatedDate)}</td>
+          <td>${l.LeadName || "-"}</td>
+          <td><i class="fa-solid fa-phone table_phone"></i> ${maskPhone(
+            l.Mobile
+          )}</td>
+          <td>${l.OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "-"}</td>
+          <td>${fmtTags(l.TagIDText || "")}</td>
+          <td>${l.CustomField13Text || "-"}</td>
+          <td>${l.CustomField14Text || "-"}</td>
+          <td>${l.CustomField15Text || "-"}</td>
+          <td>${l.CustomField16Text || "-"}</td>
+          <td>${l.Description || "-"}</td>
         </tr>`;
     }
 
@@ -3207,7 +3096,6 @@ function renderLeadTable(leads) {
     isLoading = false;
   }
 
-  // 🧹 Xóa và render lại toàn bộ
   function refreshTable() {
     tbody.innerHTML = "";
     index = 0;
@@ -3216,42 +3104,38 @@ function renderLeadTable(leads) {
     wrapper.scrollTop = 0;
   }
 
-  // 🔹 Render đợt đầu
+  // 🔹 Initial render
   renderChunk(INITIAL_CHUNK);
 
-  // 🔹 Scroll event: lazy load thêm
-  wrapper.addEventListener("scroll", () => {
-    if (isLoading) return;
-    const { scrollTop, scrollHeight, clientHeight } = wrapper;
-    if (scrollHeight - scrollTop - clientHeight < 200 && index < leads.length) {
-      isLoading = true;
-      requestAnimationFrame(() => renderChunk(SCROLL_CHUNK));
-    }
-  });
+  // 🔹 Lazy load khi scroll
+  wrapper.addEventListener(
+    "scroll",
+    () => {
+      if (isLoading) return;
+      const { scrollTop, scrollHeight, clientHeight } = wrapper;
+      if (
+        scrollHeight - scrollTop - clientHeight < 200 &&
+        index < leads.length
+      ) {
+        isLoading = true;
+        requestAnimationFrame(() => renderChunk(SCROLL_CHUNK));
+      }
+    },
+    { passive: true }
+  );
 
-  // 🔸 Click sort theo "Created Date"
+  // 🔹 Sort toggle khi click header
   thList.forEach((th) => {
     if (th.textContent === "Created Date") {
       th.classList.add("clickable");
-      // 🔹 Hiện icon mặc định ↓ (mới nhất trên)
       th.innerHTML = 'Created Date <i class="fa-solid fa-sort"></i>';
-
       th.addEventListener("click", () => {
         sortAsc = !sortAsc;
-        // Reset tất cả header khác
-        thList.forEach((t) => (t.innerHTML = t.textContent));
-        th.innerHTML =
-          "Created Date " +
-          (sortAsc
-            ? '<i class="fa-solid fa-sort"></i>'
-            : '<i class="fa-solid fa-sort"></i>');
-
-        leads.sort((a, b) => {
-          const da = new Date(a.CreatedDate || 0).getTime();
-          const db = new Date(b.CreatedDate || 0).getTime();
-          return sortAsc ? da - db : db - da;
-        });
-
+        leads.sort(
+          (a, b) =>
+            (sortAsc ? 1 : -1) *
+            (new Date(a.CreatedDate || 0) - new Date(b.CreatedDate || 0))
+        );
         refreshTable();
       });
     }
@@ -3368,90 +3252,80 @@ function renderTagFrequency(grouped) {
   // ✅ Cập nhật DOM 1 lần duy nhất
   wrap.insertAdjacentHTML("beforeend", html);
 }
+// ========================== HÀM CHUNG ==========================
+function countDegrees(data) {
+  if (!Array.isArray(data)) return {};
+
+  const regex = {
+    duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
+    caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
+    thpt: /thpt/i,
+    sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
+    cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
+    thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
+  };
+
+  const deg = {
+    "Cử nhân": 0,
+    "Cao đẳng": 0,
+    "Dưới cao đẳng": 0,
+    THPT: 0,
+    "Sinh viên": 0,
+    "Thạc sĩ": 0,
+    Khác: 0,
+  };
+
+  const descs = data.map((d) =>
+    d.Description ? d.Description.toLowerCase() : ""
+  );
+
+  for (const desc of descs) {
+    if (!desc.trim()) continue;
+    if (regex.duoiCD.test(desc)) deg["Dưới cao đẳng"]++;
+    else if (regex.caoDang.test(desc)) deg["Cao đẳng"]++;
+    else if (regex.thpt.test(desc)) deg["THPT"]++;
+    else if (regex.cuNhan.test(desc)) deg["Cử nhân"]++;
+    else if (regex.sinhVien.test(desc)) deg["Sinh viên"]++;
+    else if (regex.thacSi.test(desc)) deg["Thạc sĩ"]++;
+    else deg["Khác"]++;
+  }
+
+  return deg;
+}
 
 function renderDegreeChart(grouped) {
-  console.log("renderDegreeChart grouped:", grouped);
-
   const ctx = document.getElementById("degreeChart");
   const top_edu = document.getElementById("top_edu");
   if (!ctx) return;
 
-  // ⚙️ Nếu grouped không phải array (ví dụ GROUPED object) thì flatten
   const data = Array.isArray(grouped)
     ? grouped
     : Object.values(grouped.byOwner || {}).flatMap((o) => o.leads || []);
   if (!data.length) return;
 
-  // 🧩 Regex pre-compile
-// ⚡ Regex - KHÔNG có cờ /g
-const regex = {
-  duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
-  caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
-  thpt: /thpt/i,
-  sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
-  cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
-  thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
-};
-
-const degreeCounts = {
-  "Cử nhân": 0,
-  "Cao đẳng": 0,
-  "Dưới cao đẳng": 0,
-  THPT: 0,
-  "Sinh viên": 0,
-  "Thạc sĩ": 0,
-  Khác: 0,
-};
-
-// ⚡ Preprocess mô tả một lần cho nhanh
-const descs = data.map(d => (d.Description ? d.Description.toLowerCase() : ""));
-
-for (const desc of descs) {
-  if (!desc.trim()) continue;
-
-  if (regex.duoiCD.test(desc)) degreeCounts["Dưới cao đẳng"]++;
-  else if (regex.caoDang.test(desc)) degreeCounts["Cao đẳng"]++;
-  else if (regex.thpt.test(desc)) degreeCounts["THPT"]++;
-  else if (regex.cuNhan.test(desc)) degreeCounts["Cử nhân"]++;
-  else if (regex.sinhVien.test(desc)) degreeCounts["Sinh viên"]++;
-  else if (regex.thacSi.test(desc)) degreeCounts["Thạc sĩ"]++;
-  else degreeCounts["Khác"]++;
-}
-
-VIEW_DEGREE = degreeCounts;
-console.log("🎓 degreeCounts:", degreeCounts);
-
+  const degreeCounts = countDegrees(data);
   VIEW_DEGREE = degreeCounts;
-  console.log("🎓 degreeCounts:", degreeCounts);
 
-  // ⚙️ Cập nhật chart
   const labels = Object.keys(degreeCounts);
   const values = Object.values(degreeCounts);
   const maxValue = Math.max(...values);
   const barColors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
 
-  // 🏆 Gán top
-  if (top_edu && maxValue > 0) {
-    const maxIndex = values.indexOf(maxValue);
-    top_edu.textContent = labels[maxIndex] || "";
-  }
+  if (top_edu && maxValue > 0)
+    top_edu.textContent = labels[values.indexOf(maxValue)] || "";
 
-  // 🔄 Nếu chart đã có → update
-  if (window.degreeChartInstance) {
-    const chart = window.degreeChartInstance;
-    if (
-      JSON.stringify(chart.data.datasets[0].data) !== JSON.stringify(values)
-    ) {
-      chart.data.labels = labels;
-      chart.data.datasets[0].data = values;
-      chart.data.datasets[0].backgroundColor = barColors;
-      chart.data.datasets[0].borderColor = barColors;
-      chart.update();
+  const inst = window.degreeChartInstance;
+  if (inst) {
+    if (!arraysEqual(inst.data.datasets[0].data, values)) {
+      inst.data.labels = labels;
+      inst.data.datasets[0].data = values;
+      inst.data.datasets[0].backgroundColor = barColors;
+      inst.data.datasets[0].borderColor = barColors;
+      inst.update();
     }
     return;
   }
 
-  // 🚀 Tạo chart mới
   window.degreeChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
@@ -3475,7 +3349,7 @@ console.log("🎓 degreeCounts:", degreeCounts);
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} Leads`,
+            label: (c) => `${c.parsed.y.toLocaleString()} Leads`,
           },
         },
         datalabels: {
@@ -3502,7 +3376,7 @@ console.log("🎓 degreeCounts:", degreeCounts);
             stepSize: Math.ceil(maxValue / 4) || 1,
             callback: (v) => (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
           },
-          afterDataLimits: (scale) => (scale.max *= 1.1),
+          afterDataLimits: (s) => (s.max *= 1.1),
           grid: { color: "rgba(0,0,0,0.05)" },
         },
       },
@@ -3516,10 +3390,7 @@ function renderProgramChart(grouped) {
   const top_program = document.getElementById("top_program");
   if (!ctx) return;
 
-  // ✅ Dùng biến cục bộ, tránh đọc DOM nhiều lần
   const freq = grouped.tagFrequency || {};
-
-  // ✅ Gom dữ liệu chương trình
   const programs = [
     ["MSc AI UMEF", freq["Msc_AI UMEF"] || 0],
     ["MBA UMEF", freq["MBA UMEF"] || 0],
@@ -3537,30 +3408,25 @@ function renderProgramChart(grouped) {
     return;
   }
 
-  // ✅ Chuẩn bị labels & values
   const labels = programs.map(([k]) => k);
   const values = programs.map(([_, v]) => v);
   const maxValue = Math.max(...values);
   const colors = values.map((v) => (v === maxValue ? "#ffa900" : "#d9d9d9"));
-
-  // ✅ Cập nhật top label
   if (top_program) top_program.textContent = labels[values.indexOf(maxValue)];
 
-  // ⚡ Nếu đã có chart → update cực nhanh, không re-render
-  const existing = window.programChartInstance;
-  if (existing) {
-    const ds = existing.data.datasets[0];
-    existing.data.labels = labels;
+  const inst = window.programChartInstance;
+  if (inst) {
+    const ds = inst.data.datasets[0];
+    inst.data.labels = labels;
     ds.data = values;
     ds.backgroundColor = colors;
     ds.borderColor = colors;
-    existing.options.animation.duration = 300; // nhanh hơn
-    existing.update("none"); // không animation nặng
+    inst.options.animation.duration = 300;
+    inst.update("none");
     return;
   }
 
-  // 🚀 Tạo chart mới (chỉ chạy 1 lần)
-  const chart = new Chart(ctx, {
+  window.programChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
       labels,
@@ -3577,15 +3443,13 @@ function renderProgramChart(grouped) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: false, // tắt hoàn toàn animation khi render lần đầu
+      animation: false,
       plugins: {
         legend: { display: false },
         tooltip: {
           intersect: false,
           animation: false,
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
-          },
+          callbacks: { label: (c) => `${c.parsed.y.toLocaleString()} leads` },
         },
         datalabels: {
           anchor: "end",
@@ -3614,117 +3478,102 @@ function renderProgramChart(grouped) {
     },
     plugins: [ChartDataLabels],
   });
-
-  window.programChartInstance = chart;
 }
 
 function renderLeadQualityMeter(grouped) {
   if (!grouped?.byTag) return;
-
-  // 🔢 Tính toán tổng lead và từng nhóm
   const totalLeads = Object.values(grouped.byTag).flat().length;
-  const neededCount = grouped.byTag["Needed"]?.length || 0;
-  const consideringCount = grouped.byTag["Considering"]?.length || 0;
-  const qualityCount = neededCount + consideringCount;
+  const needed = grouped.byTag["Needed"]?.length || 0;
+  const considering = grouped.byTag["Considering"]?.length || 0;
+  const quality = needed + considering;
 
-  // 📊 Tính % tổng
-  const percent = totalLeads
-    ? ((qualityCount / totalLeads) * 100).toFixed(2)
-    : 0;
+  const percent = totalLeads ? ((quality / totalLeads) * 100).toFixed(2) : 0;
   const neededPercent = totalLeads
-    ? ((neededCount / totalLeads) * 100).toFixed(1)
+    ? ((needed / totalLeads) * 100).toFixed(1)
     : 0;
   const consideringPercent = totalLeads
-    ? ((consideringCount / totalLeads) * 100).toFixed(1)
+    ? ((considering / totalLeads) * 100).toFixed(1)
     : 0;
 
-  // --- DOM elements ---
   const donut = document.querySelector(".semi-donut");
   const number = donut?.querySelector(".frequency_number");
   const labelNeeded = document.querySelector(".dom_frequency_label_impression");
   const labelConsidering = document.querySelector(".dom_frequency_label_reach");
   const rangeLabel = document.querySelector(".frequency_number_label");
 
-  // --- Update donut (mức độ đầy và màu) ---
-  if (donut) donut.style.setProperty("--percentage", percent);
+  if (donut) {
+    donut.style.setProperty("--percentage", percent);
+    let fill = "#ffa900";
+    if (percent >= 40) fill = "#00b148";
+    else if (percent <= 20) fill = "#e17055";
+    donut.style.setProperty("--fill", fill);
+  }
   if (number)
-    number.innerHTML = `<span>${percent}%</span><span>(${qualityCount})</span>`;
-
-  // --- Update labels ---
+    number.innerHTML = `<span>${percent}%</span><span>(${quality})</span>`;
   if (labelNeeded) labelNeeded.textContent = `${neededPercent}%`;
   if (labelConsidering) labelConsidering.textContent = `${consideringPercent}%`;
-
-  // --- Update dòng tổng số ---
   if (rangeLabel) {
     const [left, right] = rangeLabel.querySelectorAll("p");
-    if (left) left.textContent = `0`; // Needed + Considering
-    if (right) right.textContent = `${totalLeads}`; // Total lead
-  }
-
-  // --- Màu vòng động theo chất lượng ---
-  if (donut) {
-    let fillColor = "#ffa900"; // mặc định vàng
-    if (percent >= 40) fillColor = "#00b148"; // xanh lá khi tốt
-    else if (percent <= 20) fillColor = "#e17055"; // đỏ nếu thấp
-    donut.style.setProperty("--fill", fillColor);
+    if (left) left.textContent = `0`;
+    if (right) right.textContent = `${totalLeads}`;
   }
 }
 
 function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
   currentTagFilter = tagFilter;
-  const ctx = document.getElementById("leadTrendChart");
+  const ctx = qsc("#leadTrendChart");
   if (!ctx) return;
 
-  const byDate = grouped.byDate;
-  const dates = Object.keys(byDate).sort((a, b) => new Date(a) - new Date(b));
+  const dates = Object.keys(grouped.byDate).sort();
   if (!dates.length) return;
 
-  // ✅ Chuẩn bị data cực nhanh (vòng for native)
   const totalCounts = new Array(dates.length);
   const tagCounts = new Array(dates.length);
   for (let i = 0; i < dates.length; i++) {
-    const stat = byDate[dates[i]];
-    totalCounts[i] = stat.total || 0;
-    tagCounts[i] = stat[tagFilter] || 0;
+    const s = grouped.byDate[dates[i]];
+    totalCounts[i] = s.total || 0;
+    tagCounts[i] = s[tagFilter] || 0;
+  }
+  const maxValue = totalCounts.length ? Math.max.apply(null, totalCounts) : 0;
+
+  let gTotal = window._gradTotal,
+    gTag = window._gradTag;
+  const c2d = ctx.getContext("2d");
+  if (!gTotal || !gTag) {
+    gTotal = c2d.createLinearGradient(0, 0, 0, 400);
+    gTotal.addColorStop(0, "rgba(255,171,0,0.8)");
+    gTotal.addColorStop(1, "rgba(255,171,0,0.1)");
+    gTag = c2d.createLinearGradient(0, 0, 0, 400);
+    gTag.addColorStop(0, "rgba(38,42,83,0.8)");
+    gTag.addColorStop(1, "rgba(38,42,83,0.1)");
+    window._gradTotal = gTotal;
+    window._gradTag = gTag;
   }
 
-  // ✅ Gradient cache (tạo 1 lần duy nhất)
-  let gradientTotal = window._gradTotal,
-    gradientTag = window._gradTag;
-  const ctx2d = ctx.getContext("2d");
-  if (!gradientTotal || !gradientTag) {
-    gradientTotal = ctx2d.createLinearGradient(0, 0, 0, 400);
-    gradientTotal.addColorStop(0, "rgba(255, 171, 0, 0.8)");
-    gradientTotal.addColorStop(1, "rgba(255, 171, 0, 0.1)");
-    gradientTag = ctx2d.createLinearGradient(0, 0, 0, 400);
-    gradientTag.addColorStop(0, "rgba(38,42,83, 0.8)");
-    gradientTag.addColorStop(1, "rgba(38,42,83, 0.1)");
-    window._gradTotal = gradientTotal;
-    window._gradTag = gradientTag;
-  }
-
-  // 🧮 Update lead counter + tag chart (không block UI)
-  requestIdleCallback(() => {
+  scheduleIdle(() => {
     updateLeadCounters(grouped, currentTagFilter);
     renderLeadTagChart(grouped);
-  });
+  }, 60);
 
-  // 🔄 Nếu chart đã có → update data cực nhanh
-  const chart = window.leadChartInstance;
-  if (chart) {
-    chart.data.labels = dates;
-    const [total, tag] = chart.data.datasets;
-    total.data = totalCounts;
-    tag.data = tagCounts;
-    tag.label = `${tagFilter} Leads`;
+  const inst = window.leadChartInstance;
+  if (inst) {
+    if (
+      arraysEqual(inst.data.labels, dates) &&
+      arraysEqual(inst.data.datasets[0].data, totalCounts) &&
+      arraysEqual(inst.data.datasets[1].data, tagCounts) &&
+      inst.data.datasets[1].label === `${tagFilter} Leads`
+    )
+      return;
 
-    // 🧠 update nhẹ, bỏ animation cũ
-    chart.options.animation.duration = 400;
-    chart.update("active");
+    inst.data.labels = dates;
+    inst.data.datasets[0].data = totalCounts;
+    inst.data.datasets[1].data = tagCounts;
+    inst.data.datasets[1].label = `${tagFilter} Leads`;
+    inst.options.animation.duration = 300;
+    inst.update("active");
     return;
   }
 
-  // 🚀 Tạo chart mới – config tối giản, full hiệu năng
   window.leadChartInstance = new Chart(ctx, {
     type: "line",
     data: {
@@ -3733,7 +3582,7 @@ function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
         {
           label: "Total Leads",
           data: totalCounts,
-          backgroundColor: gradientTotal,
+          backgroundColor: gTotal,
           borderColor: "#ffab00",
           fill: true,
           tension: 0,
@@ -3743,7 +3592,7 @@ function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
         {
           label: `${tagFilter} Leads`,
           data: tagCounts,
-          backgroundColor: gradientTag,
+          backgroundColor: gTag,
           borderColor: "#262a53",
           fill: true,
           tension: 0,
@@ -3755,34 +3604,42 @@ function renderLeadTrendChart(grouped, tagFilter = currentTagFilter) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 600, easing: "easeOutQuart" },
-      elements: { line: { borderJoinStyle: "round" } },
+      animation: { duration: 300 },
       plugins: {
-        legend: false,
+        legend: { position: "top", align: "end" },
         tooltip: {
-          mode: "index",
-          intersect: false,
           callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
+            label: (c) => {
+              const total = totalCounts[c.dataIndex] || 0,
+                cnt = c.parsed.y || 0;
+              const pct = total > 0 ? ((cnt / total) * 100).toFixed(1) : 0;
+              return `${
+                c.dataset.label
+              }: ${cnt.toLocaleString()} leads (${pct}%)`;
+            },
           },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: { weight: "bold", size: 12 },
+          formatter: (v) => (v > 0 ? v : ""),
         },
       },
       scales: {
         x: {
-          ticks: { color: "#555", maxTicksLimit: 10 },
           grid: { color: "rgba(0,0,0,0.05)" },
+          ticks: { color: "#444", autoSkip: true, maxTicksLimit: 8 },
         },
         y: {
           beginAtZero: true,
-          ticks: {
-            color: "#666",
-            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k" : v),
-          },
           grid: { color: "rgba(0,0,0,0.05)" },
-          afterDataLimits: (scale) => (scale.max *= 1.05),
+          ticks: { color: "#666", stepSize: Math.ceil((maxValue || 1) / 4) },
+          afterDataLimits: (s) => (s.max *= 1.1),
         },
       },
     },
+    plugins: [ChartDataLabels],
   });
 }
 
@@ -4108,14 +3965,11 @@ function setupCompareDropdowns() {
 // =======================
 async function loadCompareData(range1, range2) {
   const compareWrap = document.querySelector(".dom_compare");
-  const loading = document.querySelector(".loading");
   if (!compareWrap) return alert("⚠️ Không tìm thấy vùng compare!");
-
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
   const currentAccount =
     localStorage.getItem("selectedAccount") || "Total Data";
-  console.log("📊 Loading compare data for:", currentAccount);
-
-  loading.classList.add("active"); // 🌀 Hiện overlay loading
 
   try {
     // 🧩 Fetch song song
@@ -4150,13 +4004,12 @@ async function loadCompareData(range1, range2) {
     window.CRM_DATA_2 = data2;
     window.GROUPED_COMPARE_1 = g1;
     window.GROUPED_COMPARE_2 = g2;
-
     console.log("✅ Compare data loaded & cached for:", currentAccount);
   } catch (err) {
     console.error("❌ Lỗi khi tải Compare:", err);
     alert("Lỗi khi tải dữ liệu so sánh!");
   } finally {
-    loading.classList.remove("active"); // 🧩 Ẩn overlay loading sau khi xong
+    loading.classList.remove("active");
   }
 }
 
@@ -4222,8 +4075,9 @@ document.addEventListener("click", async (e) => {
   const range2 = getDateRange("previous_7days");
 
   updateCompareDateUI(range1, range2);
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
   await loadCompareData(range1, range2);
-
   compareLoaded = true;
 });
 
@@ -4246,10 +4100,7 @@ document.addEventListener("click", async (e) => {
 
   // 🔒 Giới hạn ngày
   const limitDate = new Date("2025-10-01");
-  if (
-    new Date(range1.to) < limitDate ||
-    new Date(range2.to) < limitDate
-  ) {
+  if (new Date(range1.to) < limitDate || new Date(range2.to) < limitDate) {
     alert("⚠️ Ngày phải sau 01/10/2025!");
     return;
   }
@@ -4258,53 +4109,6 @@ document.addEventListener("click", async (e) => {
   await loadCompareData(range1, range2);
 });
 
-// document.addEventListener("click", async (e) => {
-//   const menuItem = e.target.closest(".dom_menu li");
-//   if (!menuItem) return;
-
-//   const view = menuItem.dataset.view;
-//   const loading = document.querySelector(".loading");
-
-//   // 1️⃣ Cập nhật trạng thái menu
-//   document
-//     .querySelectorAll(".dom_menu li")
-//     .forEach((li) => li.classList.toggle("active", li === menuItem));
-
-//   // 2️⃣ Ẩn toàn bộ container trước
-//   document.querySelectorAll(".dom_container").forEach((div) => {
-//     div.classList.remove("active");
-//   });
-
-//   // 3️⃣ Hiển thị đúng container
-//   const targetContainer = document.querySelector(`.dom_${view}`);
-//   if (targetContainer) {
-//     targetContainer.classList.add("active");
-//   } else {
-//     console.warn(`⚠️ Không tìm thấy .dom_${view}`);
-//   }
-
-//   // 4️⃣ Nếu là Compare thì tải dữ liệu
-//   if (view === "compare") {
-//     loading?.classList.add("active");
-//     try {
-//       const range1 = getDateRange("last_7days");
-//       const range2 = getDateRange("previous_7days");
-//       await loadCompareData(range1, range2);
-//     } catch (err) {
-//       console.error("❌ Lỗi khi tải Compare:", err);
-//     } finally {
-//       loading?.classList.remove("active");
-//     }
-//   }
-
-//   console.log("✅ Hiển thị:", view);
-// });
-
-// =======================
-// 📍 Khi click nút “Compare” (manual refresh)
-// =======================
-
-// 🔹 Tổng hợp dữ liệu cơ bản
 function summarizeCompareData(data, grouped) {
   if (!data?.length)
     return {
@@ -4366,7 +4170,13 @@ function renderCompareBoxes(compareWrap, s1, s2) {
   };
 
   // 🧩 Render 1 box
-  const renderOne = (box, current, previous, isReversed = false, inactive = false) => {
+  const renderOne = (
+    box,
+    current,
+    previous,
+    isReversed = false,
+    inactive = false
+  ) => {
     const title = box.querySelector(".chart_title") || box.querySelector("h3");
     const c1 = box.querySelector("ul li:nth-of-type(1) p");
     const c2 = box.querySelector("ul li:nth-of-type(2) p");
@@ -4391,7 +4201,11 @@ function renderCompareBoxes(compareWrap, s1, s2) {
       reverseDiff(diffValue(data.qualifiedPct, ref.qualifiedPct), factor),
       true
     );
-    renderField(c3, data.needed, reverseDiff(diffValue(data.needed, ref.needed), factor));
+    renderField(
+      c3,
+      data.needed,
+      reverseDiff(diffValue(data.needed, ref.needed), factor)
+    );
     renderField(
       c4,
       data.considering,
@@ -4402,7 +4216,8 @@ function renderCompareBoxes(compareWrap, s1, s2) {
   // 🔄 Đảo chiều tăng/giảm
   const reverseDiff = (d, factor) => {
     if (factor === 1) return d; // giữ nguyên
-    const reversedSign = d.sign === "up" ? "down" : d.sign === "down" ? "up" : "equal";
+    const reversedSign =
+      d.sign === "up" ? "down" : d.sign === "down" ? "up" : "equal";
     return { pct: d.pct, sign: reversedSign, delta: -d.delta };
   };
 
@@ -4446,57 +4261,139 @@ function renderCompareBoxes(compareWrap, s1, s2) {
   highlightBox(boxes[0], boxes[1], d1, d2);
 }
 
-
 // 🔹 Vẽ trend chart so sánh 2 giai đoạn
 function renderCompareTrendChart(g1, g2) {
   const ctx = document.getElementById("leadTrendChartCompare");
   if (!ctx) return;
 
-  const byDate1 = g1.byDate || {};
-  const byDate2 = g2.byDate || {};
+  const byDate1Raw = g1.byDate || {};
+  const byDate2Raw = g2.byDate || {};
 
-  const dates1 = Object.keys(byDate1).sort((a, b) => new Date(a) - new Date(b));
-  const dates2 = Object.keys(byDate2).sort((a, b) => new Date(a) - new Date(b));
+  // normalize key -> YYYY-MM-DD (fallback: trim original)
+  const normalizeKey = (k) => {
+    if (!k && k !== 0) return "";
+    // try Date parse first
+    const dt = new Date(k);
+    if (!isNaN(dt.getTime())) {
+      // lấy yyyy-mm-dd
+      return dt.toISOString().slice(0, 10);
+    }
+    // else fallback: lấy phần trước khoảng trắng (common cases)
+    return String(k).split(/\s+/)[0].trim();
+  };
 
-  const counts1 = dates1.map((d) => byDate1[d]?.total || 0);
-  const counts2 = dates2.map((d) => byDate2[d]?.total || 0);
+  // build maps normalizedKey -> entry
+  const map1 = {};
+  for (const k of Object.keys(byDate1Raw)) {
+    const nk = normalizeKey(k);
+    map1[nk] = byDate1Raw[k];
+  }
+  const map2 = {};
+  for (const k of Object.keys(byDate2Raw)) {
+    const nk = normalizeKey(k);
+    map2[nk] = byDate2Raw[k];
+  }
 
-  const ctx2d = ctx.getContext("2d");
+  // union of dates
+  const dateSet = new Set([...Object.keys(map1), ...Object.keys(map2)]);
+  const dates = Array.from(dateSet).sort((a, b) => new Date(a) - new Date(b));
 
-  // 🎨 Gradient
-  let grad1 = ctx2d.createLinearGradient(0, 0, 0, 400);
-  grad1.addColorStop(0, "rgba(255, 171, 0, 0.8)");
-  grad1.addColorStop(1, "rgba(255, 171, 0, 0.1)");
+  // helper lấy total an toàn (hỗ trợ nhiều tên trường)
+  const getTotalFromEntry = (entry) => {
+    if (!entry) return 0;
+    // thử các trường khả dĩ
+    const candidates = [
+      "total",
+      "Total",
+      "count",
+      "Count",
+      "total_leads",
+      "totalLead",
+    ];
+    for (const c of candidates) {
+      if (entry[c] !== undefined && entry[c] !== null) {
+        const n = Number(entry[c]);
+        return isNaN(n) ? 0 : n;
+      }
+    }
+    // nếu object là mảng (một số cấu trúc store as array)
+    if (Array.isArray(entry)) return entry.length;
+    // nếu entry có length property
+    if (entry.length !== undefined) {
+      const n = Number(entry.length);
+      return isNaN(n) ? 0 : n;
+    }
+    return 0;
+  };
 
-  let grad2 = ctx2d.createLinearGradient(0, 0, 0, 400);
-  grad2.addColorStop(0, "rgba(38,42,83, 0.8)");
-  grad2.addColorStop(1, "rgba(38,42,83, 0.1)");
+  const counts1 = dates.map((d) => getTotalFromEntry(map1[d]));
+  const counts2 = dates.map((d) => getTotalFromEntry(map2[d]));
+  const maxValue = Math.max(...counts1, ...counts2, 0);
 
-  // 🔄 Xóa chart cũ nếu có
-  if (window.compareChartInstance) window.compareChartInstance.destroy();
+  // debug quick check: nếu counts2 toàn 0 thì log chi tiết
+  if (counts2.every((v) => v === 0)) {
+    console.warn(
+      "renderCompareTrendChart: all counts2 are 0 — kiểm tra map2 và raw keys:"
+    );
+    console.table({
+      datesSample: dates.slice(0, 10),
+      map2KeysSample: Object.keys(map2).slice(0, 10),
+      rawByDate2KeysSample: Object.keys(byDate2Raw).slice(0, 10),
+    });
+  }
 
-  // 🚀 Vẽ chart mới
+  const c2d = ctx.getContext("2d");
+  // reuse gradients
+  if (!window._gradRange1 || !window._gradRange2) {
+    const g1 = c2d.createLinearGradient(0, 0, 0, 400);
+    g1.addColorStop(0, "rgba(255, 171, 0, 0.8)");
+    g1.addColorStop(1, "rgba(255, 171, 0, 0.1)");
+    const g2 = c2d.createLinearGradient(0, 0, 0, 400);
+    g2.addColorStop(0, "rgba(38,42,83, 0.8)");
+    g2.addColorStop(1, "rgba(38,42,83, 0.1)");
+    window._gradRange1 = g1;
+    window._gradRange2 = g2;
+  }
+
+  const inst = window.compareChartInstance;
+  if (inst) {
+    if (
+      arraysEqual(inst.data.labels, dates) &&
+      arraysEqual(inst.data.datasets[0].data, counts1) &&
+      arraysEqual(inst.data.datasets[1].data, counts2)
+    )
+      return;
+    inst.data.labels = dates;
+    inst.data.datasets[0].data = counts1;
+    inst.data.datasets[1].data = counts2;
+    inst.options.animation.duration = 300;
+    inst.update("active");
+    return;
+  }
+
   window.compareChartInstance = new Chart(ctx, {
     type: "line",
     data: {
-      labels: dates1.length >= dates2.length ? dates1 : dates2,
+      labels: dates,
       datasets: [
         {
-          label: "",
+          label: "Range 1",
           data: counts1,
-          backgroundColor: grad1,
+          backgroundColor: window._gradRange1,
           borderColor: "#ffab00",
           fill: true,
-          pointRadius: 0,
+          tension: 0,
+          pointRadius: 3,
           borderWidth: 2,
         },
         {
-          label: "",
+          label: "Range 2",
           data: counts2,
-          backgroundColor: grad2,
+          backgroundColor: window._gradRange2,
           borderColor: "#262a53",
           fill: true,
-          pointRadius: 0,
+          tension: 0,
+          pointRadius: 3,
           borderWidth: 2,
         },
       ],
@@ -4504,36 +4401,40 @@ function renderCompareTrendChart(g1, g2) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 600, easing: "easeOutQuart" },
-      elements: { line: { borderJoinStyle: "round" } },
+      animation: { duration: 400 },
       plugins: {
-        legend: { display: false }, // ✅ Ẩn chú thích
+        legend: { position: "top", align: "end" },
         tooltip: {
-          mode: "index",
-          intersect: false,
           callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toLocaleString()} leads`,
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} leads`,
           },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          font: { weight: "bold", size: 12 },
+          color: "#333",
+          formatter: (v) => (v > 0 ? v.toLocaleString() : ""),
         },
       },
       scales: {
         x: {
-          ticks: { color: "#555", maxTicksLimit: 10 },
           grid: { color: "rgba(0,0,0,0.05)" },
+          ticks: { color: "#444", autoSkip: true, maxTicksLimit: 8 },
         },
         y: {
           beginAtZero: true,
-          ticks: {
-            color: "#666",
-            callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k" : v),
-          },
           grid: { color: "rgba(0,0,0,0.05)" },
-          afterDataLimits: (scale) => (scale.max *= 1.05),
+          ticks: { color: "#666", stepSize: Math.ceil(maxValue / 4) },
+          afterDataLimits: (s) => (s.max *= 1.1),
         },
       },
     },
+    plugins: [ChartDataLabels],
   });
 }
+
 function renderDegreeTableCompare(g1, g2) {
   const wrap = document.getElementById("degreeChartCompare");
   if (!wrap) return;
@@ -4551,42 +4452,6 @@ function renderDegreeTableCompare(g1, g2) {
     return;
   }
 
-  const regex = {
-    duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
-    caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
-    thpt: /thpt/i,
-    sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
-    cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
-    thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
-  };
-
-  const initDegrees = () => ({
-    "Cử nhân": 0,
-    "Cao đẳng": 0,
-    "Dưới cao đẳng": 0,
-    THPT: 0,
-    "Sinh viên": 0,
-    "Thạc sĩ": 0,
-    Khác: 0,
-  });
-
-  const countDegrees = (data) => {
-    const deg = initDegrees();
-    const descs = data.map((d) => (d.Description ? d.Description.toLowerCase() : ""));
-    for (let i = 0; i < descs.length; i++) {
-      const desc = descs[i];
-      if (!desc.trim()) continue;
-      if (regex.duoiCD.test(desc)) deg["Dưới cao đẳng"]++;
-      else if (regex.caoDang.test(desc)) deg["Cao đẳng"]++;
-      else if (regex.thpt.test(desc)) deg["THPT"]++;
-      else if (regex.cuNhan.test(desc)) deg["Cử nhân"]++;
-      else if (regex.sinhVien.test(desc)) deg["Sinh viên"]++;
-      else if (regex.thacSi.test(desc)) deg["Thạc sĩ"]++;
-      else deg["Khác"]++;
-    }
-    return deg;
-  };
-
   const degPrev = countDegrees(data1); // kỳ 1
   const degCurr = countDegrees(data2); // kỳ 2
 
@@ -4596,7 +4461,7 @@ function renderDegreeTableCompare(g1, g2) {
     .map((label) => {
       const prev = degPrev[label] || 0;
       const curr = degCurr[label] || 0;
-      const diff = prev - curr; // 🔁 đảo chiều: kỳ 1 - kỳ 2
+      const diff = prev - curr; // 🟢 Kỳ 2 - Kỳ 1 (hợp logic)
       const trendClass = diff > 0 ? "up" : diff < 0 ? "down" : "";
       const arrow =
         diff > 0
@@ -4776,17 +4641,17 @@ function renderLeadTagChartCompare(g1, g2) {
     chart.data.labels = labels;
     chart.data.datasets[0].data = values1;
     chart.data.datasets[1].data = values2;
-  
+
     // 🧠 Cập nhật lại max scale theo dữ liệu mới (không nâng max, không thập phân)
     chart.options.scales.r.max = Math.ceil(maxValue);
     chart.options.scales.r.ticks.stepSize = Math.ceil(maxValue / 4) || 1;
-    chart.options.scales.r.ticks.callback = (v) => Number.isInteger(v) ? v : ""; // chỉ hiện số nguyên
-  
+    chart.options.scales.r.ticks.callback = (v) =>
+      Number.isInteger(v) ? v : ""; // chỉ hiện số nguyên
+
     chart.update("none");
     return;
   }
-  
-  
+
   window.leadTagChartCompareInstance = new Chart(ctx, {
     type: "radar",
     data: {
@@ -4865,7 +4730,7 @@ function filterByAccount(data, account) {
 
   // 🧩 Lấy toàn bộ danh sách account từ HTML
   const accElements = document.querySelectorAll("ul.box_shadow li[data-acc]");
-  const accList = Array.from(accElements).map(li =>
+  const accList = Array.from(accElements).map((li) =>
     li.getAttribute("data-acc").trim().toUpperCase()
   );
 
@@ -4879,7 +4744,6 @@ function filterByAccount(data, account) {
   // 🔹 Nếu không match gì, trả lại toàn bộ
   return data;
 }
-
 
 function renderLeadSaleCompare(g1, g2) {
   if (!g1?.byOwner || !g2?.byOwner) return;
@@ -5268,7 +5132,6 @@ function generateAdvancedCompareReport() {
         <div class="ai_report_inner">${vtciHTML}</div>
       </div>`;
   } else {
-
     // 🧩 Total Data → render cả 2 khối
     const ideasHTML = makeDeepCompareReport(
       ideas.grouped1,
@@ -5324,7 +5187,9 @@ function renderCompareToplist(grouped1, grouped2) {
         for (const [medium, leads] of Object.entries(mediums)) {
           const total = leads.length;
           const needed = leads.filter((l) => l.TagMain === "Needed").length;
-          const considering = leads.filter((l) => l.TagMain === "Considering").length;
+          const considering = leads.filter(
+            (l) => l.TagMain === "Considering"
+          ).length;
           const quality = needed + considering;
           const ratio = total ? (quality / total) * 100 : 0;
           list.push({
@@ -5351,12 +5216,30 @@ function renderCompareToplist(grouped1, grouped2) {
 
   const getLogo = (key) => {
     const logos = [
-      { match: /facebook|fb/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png" },
-      { match: /google/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png" },
-      { match: /linkedin/i, url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png" },
-      { match: /tiktok/i, url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg" },
-      { match: /Web IDEAS/i, url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp" },
-      { match: /Web VTCI/i, url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp" },
+      {
+        match: /facebook|fb/i,
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
+      },
+      {
+        match: /google/i,
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
+      },
+      {
+        match: /linkedin/i,
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
+      },
+      {
+        match: /tiktok/i,
+        url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
+      },
+      {
+        match: /Web IDEAS/i,
+        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
+      },
+      {
+        match: /Web VTCI/i,
+        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
+      },
     ];
     const logo = logos.find((x) => x.match.test(key));
     return logo
@@ -5384,11 +5267,19 @@ function renderCompareToplist(grouped1, grouped2) {
     else if (data.ratio < 40) color = "rgb(255, 169, 0)";
     const rgba = color.replace("rgb(", "").replace(")", "");
     return `
-    <li class="${cls}" data-campaign="${data.campaign}" data-source="${data.source}" data-medium="${data.medium}">
-      <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${data.source} - ${data.medium}</span></p>
+    <li class="${cls}" data-campaign="${data.campaign}" data-source="${
+      data.source
+    }" data-medium="${data.medium}">
+      <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${
+      data.source
+    } - ${data.medium}</span></p>
       <p><i class="fa-solid fa-user"></i><span>${data.total}</span></p>
-      <p><i class="fa-solid fa-user-graduate"></i><span>${data.quality}</span></p>
-      <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${data.ratio}%</p>
+      <p><i class="fa-solid fa-user-graduate"></i><span>${
+        data.quality
+      }</span></p>
+      <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${
+      data.ratio
+    }%</p>
     </li>`;
   };
 
@@ -5671,23 +5562,47 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
     })
     .filter((x) => x.v1 > 0 || x.v2 > 0); // chỉ giữ khi có data
 
-  const detectDegree = (txt) => {
+  const DEGREE_REGEX = {
+    duoiCD: /(dưới[\s_]*cao[\s_]*đẳng|duoi[\s_]*cao[\s_]*dang)/i,
+    caoDang: /(cao[\s_]*đẳng|cao[\s_]*dang)/i,
+    thpt: /thpt/i,
+    sinhVien: /(sinh[\s_]*viên|sinh[\s_]*vien|sinhvien)/i,
+    cuNhan: /(cử[\s_]*nhân|cu[\s_]*nhan)/i,
+    thacSi: /(thạc[\s_]*sĩ|thac[\s_]*si)/i,
+  };
+
+  // 👉 Hàm xác định học vị
+  const detectDegree = (txt = "") => {
     const t = txt.toLowerCase();
-    if (/dưới.*cao.*đẳng/.test(t)) return "Dưới cao đẳng";
-    if (/cao.*đẳng/.test(t)) return "Cao đẳng";
-    if (/thpt/.test(t)) return "THPT";
-    if (/sinh.*viên/.test(t)) return "Sinh viên";
-    if (/cử.*nhân/.test(t)) return "Cử nhân";
-    if (/thạc.*sĩ/.test(t)) return "Thạc sĩ";
+
+    if (DEGREE_REGEX.duoiCD.test(t)) return "Dưới cao đẳng";
+    if (DEGREE_REGEX.caoDang.test(t)) return "Cao đẳng";
+    if (DEGREE_REGEX.thpt.test(t)) return "THPT";
+    if (DEGREE_REGEX.cuNhan.test(t)) return "Cử nhân";
+    if (DEGREE_REGEX.sinhVien.test(t)) return "Sinh viên";
+    if (DEGREE_REGEX.thacSi.test(t)) return "Thạc sĩ";
     return "Khác";
   };
-  const countDegree = (arr) => {
-    const out = {};
+
+  // 👉 Hàm đếm học vị
+  const countDegree = (arr = []) => {
+    const degCount = {
+      "Dưới cao đẳng": 0,
+      THPT: 0,
+      "Cao đẳng": 0,
+      "Sinh viên": 0,
+      "Cử nhân": 0,
+      "Thạc sĩ": 0,
+      Khác: 0,
+    };
+
     for (const l of arr) {
-      const deg = detectDegree(l.Description || l.CustomField5Text || "");
-      out[deg] = (out[deg] || 0) + 1;
+      const text = l.Description || l.CustomField5Text || "";
+      const degree = detectDegree(text);
+      degCount[degree]++;
     }
-    return out;
+
+    return degCount;
   };
   const degreeCompare = makeCompareArr(countDegree(d1), countDegree(d2));
 
@@ -5695,7 +5610,6 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
     if (!arr?.length) return "";
     const rows = arr
       .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
-      .slice(0, 5)
       .map(
         (x) => `
         <tr>
@@ -5867,4 +5781,3 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
     <ul class="insight_list fade_in_item delay-13">${insightHTML}</ul>
   </section>`;
 }
-
