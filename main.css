@@ -359,7 +359,6 @@ html {
   height: max-content;
   max-height: unset;
   padding-bottom: 2rem;
-
 }
 .compare .dom_toplist > li {
   grid-template-columns: 1fr 50px 50px 50px;
@@ -369,6 +368,12 @@ html {
 }
 .compare .dom_toplist > li.up {
   background-color: rgb(250, 255, 243);
+}
+.compare .dom_toplist > li.up > p:nth-of-type(2) {
+  color: rgb(0, 177, 72);
+}
+.compare .dom_toplist > li.down > p:nth-of-type(2) {
+  color: rgb(225, 112, 85);
 }
 .compare .dom_toplist > li.inactive {
   opacity: 0.8;
@@ -693,8 +698,8 @@ tbody {
   display: flex;
   gap: 1rem;
   flex-direction: column;
-  right: -100%;
-  width: 100%;
+  right: -24rem;
+  width: max-content;
   top: -9.5rem;
   padding: 2rem;
   border-radius: 15px;
@@ -2256,13 +2261,12 @@ tbody {
   max-height: 600px; /* tùy */
   overflow-y: auto;
   display: flex;
-  gap:1rem;
+  gap: 1rem;
 }
 .compare_scroll_wrap .dom_toplist_wrap {
   height: auto;
   overflow-y: visible;
   max-height: 36.5rem;
-
 }
 .mini_table {
   width: 100%;
@@ -2272,7 +2276,8 @@ tbody {
   border: 1px solid rgba(0, 0, 0, 0.13);
   padding: 1px;
 }
-.mini_table th, .mini_table td {
+.mini_table th,
+.mini_table td {
   padding: 0.8rem 1rem;
   text-align: center;
   border-bottom: 1px solid #eee;
@@ -2316,7 +2321,7 @@ tbody {
 }
 /* Thêm vào thẻ <style> của bạn */
 .dom_select.compare {
-  padding-left: 1rem
+  padding-left: 1rem;
 }
 /* Ẩn ban đầu */
 .dom_fade_item {
@@ -2330,7 +2335,7 @@ tbody {
   opacity: 1;
   transform: translateX(0);
 }
-#main_table td:nth-child(4) ,
+#main_table td:nth-child(4),
 #main_table td:nth-child(3) {
-  width: 15rem
+  width: 15rem;
 }
