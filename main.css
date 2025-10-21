@@ -2339,3 +2339,6 @@ tbody {
 #main_table td:nth-child(3) {
   width: 15rem;
 }
+.dom_sidebar .dom_logo i {
+  display: none;
+}
