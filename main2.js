@@ -81,7 +81,7 @@ const compareState = {
   data2: null,
 };
 
-let MISA_TOKEN_READY = false; // 🟢 Chỉ login lại lần đầu tiên
+let MISA = false; // 🟢 Chỉ login lại lần đầu tiên
 
 function waitForOTP() {
   return new Promise((resolve, reject) => {
@@ -136,12 +136,12 @@ async function loginFlow(username, password) {
   }
 
   // STEP 2: nhập OTP
-  const tempToken = data1.Data.AccessToken.Token;
+  const temp = data1.Data.AccessToken.Token;
   const otp = await waitForOTP();
 
   const formData2 = new FormData();
   formData2.append("OTP", otp);
-  formData2.append("Token", tempToken);
+  formData2.append("Token", temp);
 
   const res2 = await fetch("https://ideas.edu.vn/login_otp.php?step=otp", {
     method: "POST",
@@ -256,7 +256,7 @@ async function fetchLeads(from, to) {
   let token = null;
   try {
     // 🔹 1️⃣ Nếu đã login 1 lần rồi, chỉ dùng lại token cũ
-    if (MISA_TOKEN_READY) {
+    if (MISA) {
       token = localStorage.getItem("misa_token");
       data = await fetchLeadData(from, to, token);
 
@@ -321,8 +321,8 @@ async function fetchLeads(from, to) {
 
     // ✅ Nếu đã fetch được hợp lệ 1 lần → khóa retry logic
     if (Array.isArray(data)) {
-      MISA_TOKEN_READY = true;
-      console.log(`✅ Token OK, đã bật MISA_TOKEN_READY`);
+      MISA = true;
+      console.log(`✅ Token OK, đã bật MISA`);
     }
 
     if (!data?.length) {
