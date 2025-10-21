@@ -7,7 +7,7 @@
     z-index: 999;
     width: 100%; */
     /* display: none; */
-    z-index: 90000000099;
+    z-index: 9997;
     width: 35rem;
     transition: 0.3s ease-in;
     transform: translateX(-100%);
@@ -34,9 +34,13 @@
     margin: 0 auto;
     width: 100%;
     padding: 0 2rem;
+    padding-bottom: 20rem !important;
   }
   .dom_row {
     flex-direction: column;
+  }
+  .dom_search {
+    width: 20rem;
   }
   .dom_inner {
     width: 100% !important;
@@ -48,10 +52,16 @@
   .dom_container .dom_dashboard.sale_detail {
     width: 100% !important;
     padding: 2rem !important;
+    padding-top: 10rem !important;
   }
   .dom_ai_report {
     width: 100% !important;
     max-width: 95vw;
+  }
+  .sale_report_close {
+    top: 10rem;
+    right: 1rem;
+    left: unset;
   }
   .dom_logo {
     display: flex;
@@ -80,5 +90,15 @@
     left: 0;
     box-shadow: unset;
     padding-right: 0;
+  }
+  .dom_toplist {
+    overflow-x: hidden;
+  }
+  .dom_toplist > li {
+    grid-template-columns: 1fr 20px 20px 40px 0px;
+  }
+  .toplist_more i,
+  .toplist_more_ads i {
+    opacity: 0;
   }
 }
