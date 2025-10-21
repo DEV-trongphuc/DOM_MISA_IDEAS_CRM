@@ -2428,10 +2428,24 @@ function renderToplist(grouped, mode = "default") {
     else if (item.ratio < 40) barColor = "rgb(255, 169, 0)";
 
     let logo = defaultLogo;
-    for (const entry of logos) {
-      if (entry.match.test(item.key)) {
-        logo = entry.url;
-        break;
+
+    // Ưu tiên match theo source trước
+    if (item.source) {
+      for (const entry of logos) {
+        if (entry.match.test(item.source)) {
+          logo = entry.url;
+          break;
+        }
+      }
+    }
+
+    // Nếu source không trúng, thử match theo campaign
+    if (logo === defaultLogo && item.campaign) {
+      for (const entry of logos) {
+        if (entry.match.test(item.campaign)) {
+          logo = entry.url;
+          break;
+        }
       }
     }
 
