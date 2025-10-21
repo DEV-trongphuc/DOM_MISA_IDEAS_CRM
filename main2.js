@@ -25,7 +25,42 @@ const qsc = (sel) => {
   if (!DOMCACHE.has(sel)) DOMCACHE.set(sel, $$(sel));
   return DOMCACHE.get(sel);
 };
-
+const logos = [
+  {
+    match: /facebook|fb/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
+  },
+  {
+    match: /google/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
+  },
+  {
+    match: /tiktok/i,
+    url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
+  },
+  {
+    match: /instagram|insta/i, // 🆕 thêm dòng này
+    url: "https://ideas.edu.vn/wp-content/uploads/2025/10/Instagram_logo_2022.svg-1.webp",
+  },
+  {
+    match: /linkedin/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
+  },
+  {
+    match: /zalo/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
+  },
+  {
+    match: /Other - Web VTCI/i,
+    url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
+  },
+  {
+    match: /Other - Web IDEAS/i,
+    url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
+  },
+];
+const defaultLogo =
+  "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
 // ----------------------------------------
 // ⚙️ Cấu hình Tag ưu tiên
 // ----------------------------------------
@@ -544,39 +579,6 @@ function makeSaleAIReport(GROUPED, DATA, saleName = "SALE") {
   const totalQuality = DATA.filter((l) => goodTagRe.test(l.TagMain)).length;
   const qualityRateTotal = ((totalQuality / totalLeads) * 100).toFixed(1);
 
-  // === Logo chiến dịch ===
-  const logos = [
-    {
-      match: /facebook|fb/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-    },
-    {
-      match: /google/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-    },
-    {
-      match: /tiktok/i,
-      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-    },
-    {
-      match: /linkedin/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-    },
-    {
-      match: /zalo/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
-    },
-    {
-      match: /ideas/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-    },
-    {
-      match: /vtci/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-    },
-  ];
-  const defaultLogo =
-    "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
   const getLogo = (text = "") => {
     const t = text.toLowerCase();
     for (const l of logos) if (l.match.test(t)) return l.url;
@@ -826,40 +828,6 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
         ? "Lead đang tăng so với hôm qua."
         : "Lead giảm so với hôm qua."
       : "";
-
-  // === Logo chiến dịch ===
-  const logos = [
-    {
-      match: /facebook|fb/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-    },
-    {
-      match: /google/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-    },
-    {
-      match: /tiktok/i,
-      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-    },
-    {
-      match: /linkedin/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-    },
-    {
-      match: /zalo/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
-    },
-    {
-      match: /Other - Web VTCI/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-    },
-    {
-      match: /Other - Web IDEAS/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-    },
-  ];
-  const defaultLogo =
-    "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
   const getLogo = (text = "") => {
     const t = text.toLowerCase();
     for (const l of logos) if (l.match.test(t)) return l.url;
@@ -1241,7 +1209,11 @@ function processCRMData(data) {
 document.addEventListener("DOMContentLoaded", () => {
   const menuItems = document.querySelectorAll(".dom_menu li");
   const container = document.querySelector(".dom_container");
-
+  const mobile_menu = document.querySelector("#mobile_menu");
+  const dom_sidebar = document.querySelector(".dom_sidebar");
+  mobile_menu.addEventListener("click", () => {
+    dom_sidebar.classList.toggle("active");
+  });
   menuItems.forEach((li) => {
     li.addEventListener("click", () => {
       // 🟡 Bỏ active cũ
@@ -1257,7 +1229,7 @@ document.addEventListener("DOMContentLoaded", () => {
           container.classList.remove(cls);
         }
       });
-
+      dom_sidebar.classList.remove("active");
       // 🚀 Thêm class mới tương ứng (theo data-view)
       const view = li.getAttribute("data-view");
       container.classList.add(view);
@@ -2445,36 +2417,6 @@ function renderToplist(grouped, mode = "default") {
   wrap.innerHTML = "";
 
   // 🎨 Logo map
-  const logos = [
-    {
-      match: /facebook|fb/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-    },
-    {
-      match: /google/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-    },
-    {
-      match: /tiktok/i,
-      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-    },
-    {
-      match: /linkedin/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-    },
-    {
-      match: /zalo/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
-    },
-    {
-      match: /Other - Web VTCI/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-    },
-    {
-      match: /Other - Web IDEAS/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-    },
-  ];
 
   const defaultLogo =
     "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
@@ -5215,32 +5157,6 @@ function renderCompareToplist(grouped1, grouped2) {
   );
 
   const getLogo = (key) => {
-    const logos = [
-      {
-        match: /facebook|fb/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-      },
-      {
-        match: /google/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-      },
-      {
-        match: /linkedin/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-      },
-      {
-        match: /tiktok/i,
-        url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-      },
-      {
-        match: /Web IDEAS/i,
-        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-      },
-      {
-        match: /Web VTCI/i,
-        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-      },
-    ];
     const logo = logos.find((x) => x.match.test(key));
     return logo
       ? logo.url
