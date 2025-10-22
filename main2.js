@@ -1908,7 +1908,7 @@ function getDateRange(option) {
     // ✅ Last 7 days (không tính hôm nay)
     case "last_7days":
       to = new Date(today);
-      to.setDate(today.getDate()); // hôm qua
+      to.setDate(today.getDate() - 1); // hôm qua
       from = new Date(to);
       from.setDate(to.getDate() - 6); // tổng cộng 7 ngày
       break;
