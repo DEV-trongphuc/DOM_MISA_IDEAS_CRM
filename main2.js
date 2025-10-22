@@ -201,54 +201,48 @@ async function getToken(username, password, forceLogin = false) {
     if (quick) return quick;
   }
 
-  const fullLogin = await loginFlow(username, password);
-  if (fullLogin?.token) return fullLogin.token;
+  try {
+    const fullLogin = await loginFlow(username, password);
+    if (fullLogin?.token) return fullLogin.token;
+  } catch (err) {
+    console.warn("⚠️ loginFlow lỗi:", err);
+  }
 
   const manual = prompt("Nhập token MISA:");
   if (!manual) throw new Error("Không có token MISA");
   localStorage.setItem("misa_token", manual);
   return manual;
 }
-// ========================= FETCH LEAD DATA (no delay) =========================
 async function fetchLeadData(from, to, token) {
-  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
   const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
+  try {
+    const res = await fetch(url, { cache: "no-store" });
 
-      if (res.status === 401 || res.status === 403) {
-        // Token chưa hợp lệ hoặc hết hạn
-        console.warn(`❌ Token bị từ chối (${res.status}) ở lần ${attempt}`);
-        localStorage.removeItem("misa_token");
-        return [];
-      }
-
-      if (!res.ok) {
-        console.warn(`⚠️ Lỗi HTTP ${res.status}, thử lại (${attempt}/3)`);
-        continue; // Thử lại nếu lỗi tạm thời
-      }
-
-      const json = await res.json();
-
-      // Có data thì trả về luôn
-      if (json?.data?.length) {
-        console.log(`📦 Nhận ${json.data.length} leads (attempt ${attempt})`);
-        return json.data;
-      }
-
-      // Không có data nhưng không lỗi → có thể backend chưa sync kịp
-      console.log(`ℹ️ Attempt ${attempt}: data rỗng, thử lại ngay...`);
-      continue;
-    } catch (err) {
-      console.error(`⚠️ Lỗi network attempt ${attempt}:`, err);
-      continue;
+    if (res.status === 401 || res.status === 403) {
+      console.warn(`❌ Token bị từ chối (${res.status})`);
+      localStorage.removeItem("misa_token");
+      return [];
     }
-  }
 
-  console.error("❌ Hết 3 lượt gọi mà không có dữ liệu hợp lệ");
-  return [];
+    if (!res.ok) {
+      console.warn(`⚠️ Lỗi HTTP ${res.status}`);
+      return [];
+    }
+
+    const json = await res.json();
+
+    if (json?.data?.length) {
+      console.log(`📦 Nhận ${json.data.length} leads`);
+      return json.data;
+    }
+
+    console.log("ℹ️ Không có dữ liệu trong phản hồi hợp lệ");
+    return [];
+  } catch (err) {
+    console.error("⚠️ Lỗi network:", err);
+    return [];
+  }
 }
 
 async function fetchLeads(from, to) {
@@ -1914,7 +1908,7 @@ function getDateRange(option) {
     // ✅ Last 7 days (không tính hôm nay)
     case "last_7days":
       to = new Date(today);
-      to.setDate(today.getDate() - 1); // hôm qua
+      to.setDate(today.getDate()); // hôm qua
       from = new Date(to);
       from.setDate(to.getDate() - 6); // tổng cộng 7 ngày
       break;
