@@ -424,7 +424,7 @@ async function main() {
   performance.mark("start_main");
   const items = document.querySelectorAll(".dom_dashboard .dom_fade_item");
 
-  const initRange = getDateRange("last_7days");
+  const initRange = getDateRange("this_week");
   const dateText = document.querySelector(".dom_date");
   dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
 
@@ -5705,3 +5705,4 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
     <ul class="insight_list fade_in_item delay-13">${insightHTML}</ul>
   </section>`;
 }
+
