@@ -83,7 +83,11 @@ const compareState = {
 
 let MISA = false; // 🟢 Chỉ login lại lần đầu tiên
 
-function waitForOTP() {
+// =========================
+// Wait for OTP UI with timeout
+// =========================
+function waitForOTP(timeout = 60000) {
+  // default 60s
   return new Promise((resolve, reject) => {
     const container = document.querySelector(".dom_accounts");
     const overlay = document.querySelector(".dom_accounts_overlay");
@@ -97,12 +101,20 @@ function waitForOTP() {
     container.classList.add("active");
     overlay.classList.add("active");
 
+    const timer = setTimeout(() => {
+      container.classList.remove("active");
+      overlay.classList.remove("active");
+      confirmBtn.removeEventListener("click", handler);
+      reject("Timeout OTP");
+    }, timeout);
+
     const handler = () => {
       const otp = otpInput.value.trim();
       if (!otp) {
         alert("Vui lòng nhập OTP!");
         return;
       }
+      clearTimeout(timer);
       container.classList.remove("active");
       overlay.classList.remove("active");
       confirmBtn.removeEventListener("click", handler);
@@ -113,97 +125,115 @@ function waitForOTP() {
   });
 }
 
-async function loginFlow(username, password) {
-  // STEP 1: login để lấy temp token
-  const formData1 = new FormData();
-  formData1.append("Username", username);
-  formData1.append("Password", password);
-
-  const res1 = await fetch("https://ideas.edu.vn/login_otp.php?step=login", {
-    method: "POST",
-    body: formData1,
-  });
-  const data1 = await res1.json();
-  console.log("Step 1 response:", data1);
-
-  // Nếu không có temp token mà có EmployeeCode => bỏ qua OTP
-  if (!data1.Data?.AccessToken?.Token) {
-    if (data1.Data?.User?.EmployeeCode) {
-      console.log("Không có temp token, nhưng có EmployeeCode → qua Step 3");
-      return await doStep3();
-    }
-    throw new Error("Không nhận được temp token và không có EmployeeCode!");
-  }
-
-  // STEP 2: nhập OTP
-  const temp = data1.Data.AccessToken.Token;
-  const otp = await waitForOTP();
-
-  const formData2 = new FormData();
-  formData2.append("OTP", otp);
-  formData2.append("Token", temp);
-
-  const res2 = await fetch("https://ideas.edu.vn/login_otp.php?step=otp", {
-    method: "POST",
-    body: formData2,
-  });
-  const data2 = await res2.json();
-  console.log("Step 2 response:", data2);
-
-  if (!data2.Success) throw new Error(data2.UserMessage || "Login thất bại!");
-
-  // STEP 3: Lấy token CRM chính
-  return await doStep3();
-}
-// 🔹 Hàm Step 3 tách riêng để tái sử dụng
+// =========================
+// Step 3: lấy token CRM
+// =========================
 async function doStep3() {
   const res3 = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
     method: "POST",
   });
   const data3 = await res3.json();
-  console.log("Step 3 response:", data3);
 
   const token = data3.Data?.token;
-  const refresh_token = data3.Data?.refresh_token;
-
+  const expires = data3.Data?.expires; // ISO string
   if (!token) throw new Error("Không lấy được token CRM!");
 
   localStorage.setItem("misa_token", token);
-  localStorage.setItem("misa_refresh_token", refresh_token);
+  localStorage.setItem("misa_expires", expires);
 
-  return { token, refresh_token };
+  return { token, expires };
 }
 
+// =========================
+// Quick login với check expires
+// =========================
 async function quickLogin() {
-  const response = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  const data = await response.json();
-  const token = data?.Data?.token;
+  const storedToken = localStorage.getItem("misa_token");
+  const storedExpires = localStorage.getItem("misa_expires");
 
-  if (token) {
+  if (storedToken && storedExpires) {
+    if (new Date(storedExpires).getTime() > Date.now()) {
+      console.log("✅ Dùng token local hợp lệ");
+      return storedToken;
+    } else {
+      localStorage.removeItem("misa_token");
+      localStorage.removeItem("misa_expires");
+      console.log("⚠️ Token expired, remove");
+    }
+  }
+
+  // Lấy token mới từ step CRM
+  const res = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
+    method: "POST",
+  });
+  const data = await res.json();
+  const token = data?.Data?.token;
+  const expires = data?.Data?.expires;
+
+  if (token && expires) {
     localStorage.setItem("misa_token", token);
-    console.log("✅ Token quickLogin đã được lưu");
+    localStorage.setItem("misa_expires", expires);
+    console.log("✅ QuickLogin token mới lưu");
     return token;
   }
 
-  console.warn("⚠️ Không tìm thấy token trong quickLogin:", data);
+  console.warn("⚠️ QuickLogin không lấy được token:", data);
   return null;
 }
 
+// =========================
+// Login Flow full với OTP
+// =========================
+async function loginFlow(username, password) {
+  // STEP 1: login -> temp token
+  const form1 = new FormData();
+  form1.append("Username", username);
+  form1.append("Password", password);
+
+  const res1 = await fetch("https://ideas.edu.vn/login_otp.php?step=login", {
+    method: "POST",
+    body: form1,
+  });
+  const data1 = await res1.json();
+
+  if (!data1.Data?.AccessToken?.Token) {
+    if (data1.Data?.User?.EmployeeCode) {
+      console.log("Không có temp token, có EmployeeCode → Step3");
+      return await doStep3();
+    }
+    throw new Error("Không nhận được temp token và không có EmployeeCode!");
+  }
+
+  // STEP 2: OTP
+  const temp = data1.Data.AccessToken.Token;
+  const otp = await waitForOTP();
+  const form2 = new FormData();
+  form2.append("OTP", otp);
+  form2.append("Token", temp);
+
+  const res2 = await fetch("https://ideas.edu.vn/login_otp.php?step=otp", {
+    method: "POST",
+    body: form2,
+  });
+  const data2 = await res2.json();
+  if (!data2.Success) throw new Error(data2.UserMessage || "Login thất bại!");
+
+  // STEP 3: CRM token
+  return await doStep3();
+}
+
+// =========================
+// Lấy token với logic fallback
+// =========================
 async function getToken(username, password, forceLogin = false) {
   if (!forceLogin) {
-    let token = localStorage.getItem("misa_token");
-    if (token) return token;
-
     const quick = await quickLogin();
     if (quick) return quick;
   }
 
   try {
-    const fullLogin = await loginFlow(username, password);
-    if (fullLogin?.token) return fullLogin.token;
+    const login = await loginFlow(username, password);
+    if (login?.token) return login.token;
   } catch (err) {
     console.warn("⚠️ loginFlow lỗi:", err);
   }
@@ -213,6 +243,7 @@ async function getToken(username, password, forceLogin = false) {
   localStorage.setItem("misa_token", manual);
   return manual;
 }
+
 async function fetchLeadData(from, to, token) {
   const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
 
@@ -424,7 +455,7 @@ async function main() {
   performance.mark("start_main");
   const items = document.querySelectorAll(".dom_dashboard .dom_fade_item");
 
-  const initRange = getDateRange("this_week");
+  const initRange = getDateRange("last_7days");
   const dateText = document.querySelector(".dom_date");
   dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
 
@@ -1254,36 +1285,46 @@ function renderSaleFilter(grouped) {
 // ============================
 // RENDER FILTERS
 // ============================
+// 🔹 Hàm đếm leads recursive
+function countLeads(obj) {
+  if (!obj) return 0;
+  if (Array.isArray(obj)) return obj.length;
+  if (typeof obj === "object") {
+    return Object.values(obj).reduce((sum, v) => sum + countLeads(v), 0);
+  }
+  return 0;
+}
+
+// 🔹 Render filter options
 function renderFilterOptions(grouped) {
-  const campaignSelect = qsc(".dom_select.campaign ul.dom_select_show");
+  const campaignSelect = qsc(".dom_select.campaign ul");
   const sourceSelect = qsc(".dom_select.source ul.dom_select_show");
   const mediumSelect = qsc(".dom_select.medium ul.dom_select_show");
   if (!campaignSelect || !sourceSelect || !mediumSelect) return;
+
   campaignSelect.innerHTML = "";
   sourceSelect.innerHTML = "";
   mediumSelect.innerHTML = "";
 
-  // Campaign: luôn từ ACCOUNT_DATA (không đổi logic)
+  const group = processCRMData(ACCOUNT_DATA);
+  // 🔹 Campaign
   const fragCamp = document.createDocumentFragment();
-  for (const [campaign, sources] of Object.entries(
-    ACCOUNT_DATA.byCampaign || {}
-  )) {
-    const total = Object.values(sources)
-      .flatMap((s) => Object.values(s))
-      .flat().length;
+  for (const [campaign, sources] of Object.entries(group.byCampaign || {})) {
+    const total = countLeads(sources);
     const li = document.createElement("li");
+    console.log(total);
+
     li.innerHTML = `<span class="radio_box"></span><span><span>${campaign}</span><span class="count">${total}</span></span>`;
     li.onclick = () => applyFilter("campaign", campaign);
     fragCamp.appendChild(li);
   }
   campaignSelect.appendChild(fragCamp);
 
-  // Source: từ grouped hiện tại
+  // 🔹 Source
   const sourcesMap = Object.create(null);
   for (const sources of Object.values(grouped.byCampaign || {})) {
-    for (const [src, mediums] of Object.entries(sources)) {
-      sourcesMap[src] =
-        (sourcesMap[src] || 0) + Object.values(mediums).flat().length;
+    for (const [src, mediums] of Object.entries(sources || {})) {
+      sourcesMap[src] = (sourcesMap[src] || 0) + countLeads(mediums);
     }
   }
   const fragSrc = document.createDocumentFragment();
@@ -1295,12 +1336,12 @@ function renderFilterOptions(grouped) {
   }
   sourceSelect.appendChild(fragSrc);
 
-  // Medium
+  // 🔹 Medium
   const mediumMap = Object.create(null);
   for (const sources of Object.values(grouped.byCampaign || {})) {
-    for (const mediums of Object.values(sources)) {
-      for (const [m, leads] of Object.entries(mediums)) {
-        mediumMap[m] = (mediumMap[m] || 0) + leads.length;
+    for (const mediums of Object.values(sources || {})) {
+      for (const [m, leads] of Object.entries(mediums || {})) {
+        mediumMap[m] = (mediumMap[m] || 0) + countLeads(leads);
       }
     }
   }
@@ -5119,127 +5160,6 @@ function generateAdvancedCompareReport() {
     });
   }, 3000);
 }
-function renderCompareToplist(grouped1, grouped2) {
-  const wrap1 = document.querySelector(".compare_ads_1 .dom_toplist");
-  const wrap2 = document.querySelector(".compare_ads_2 .dom_toplist");
-  if (!wrap1 || !wrap2)
-    return console.warn("Không tìm thấy compare_ads_1 hoặc compare_ads_2.");
-
-  wrap1.innerHTML = "";
-  wrap2.innerHTML = "";
-
-  // 🔹 Dựng list
-  const buildList = (grouped) => {
-    const list = [];
-    if (!grouped?.byCampaign) return list;
-    for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
-      for (const [source, mediums] of Object.entries(sources)) {
-        for (const [medium, leads] of Object.entries(mediums)) {
-          const total = leads.length;
-          const needed = leads.filter((l) => l.TagMain === "Needed").length;
-          const considering = leads.filter(
-            (l) => l.TagMain === "Considering"
-          ).length;
-          const quality = needed + considering;
-          const ratio = total ? (quality / total) * 100 : 0;
-          list.push({
-            key: `${campaign}|${source}|${medium}`,
-            campaign,
-            source,
-            medium,
-            total,
-            quality,
-            ratio: +ratio.toFixed(1),
-          });
-        }
-      }
-    }
-    return list;
-  };
-
-  const list1 = buildList(grouped1);
-  const list2 = buildList(grouped2);
-
-  const allKeys = Array.from(
-    new Set([...list1.map((x) => x.key), ...list2.map((x) => x.key)])
-  );
-
-  const getLogo = (key) => {
-    const logo = logos.find((x) => x.match.test(key));
-    return logo
-      ? logo.url
-      : "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
-  };
-
-  const compareList = allKeys.map((key) => {
-    const a = list1.find((x) => x.key === key);
-    const b = list2.find((x) => x.key === key);
-    const diff = (a?.ratio || 0) - (b?.ratio || 0);
-    return { key, a, b, diff, absDiff: Math.abs(diff) };
-  });
-
-  compareList.sort((x, y) => {
-    if (x.a && x.b && y.a && y.b) return y.a.total - x.a.total;
-    if (x.a && !x.b) return 1;
-    if (!x.a && y.b) return 1;
-    return y.absDiff - x.absDiff;
-  });
-
-  const renderItem = (data, cls = "") => {
-    let color = "rgb(0, 177, 72)";
-    if (data.ratio < 20) color = "rgb(225, 112, 85)";
-    else if (data.ratio < 40) color = "rgb(255, 169, 0)";
-    const rgba = color.replace("rgb(", "").replace(")", "");
-    return `
-    <li class="${cls}" data-campaign="${data.campaign}" data-source="${
-      data.source
-    }" data-medium="${data.medium}">
-      <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${
-      data.source
-    } - ${data.medium}</span></p>
-      <p><i class="fa-solid fa-user"></i><span>${data.total}</span></p>
-      <p><i class="fa-solid fa-user-graduate"></i><span>${
-        data.quality
-      }</span></p>
-      <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${
-      data.ratio
-    }%</p>
-    </li>`;
-  };
-
-  compareList.forEach((item) => {
-    let a = item.a;
-    let b = item.b;
-
-    if (!a && b) {
-      a = { ...b, total: 0, quality: 0, ratio: 0 };
-    }
-    if (!b && a) {
-      b = { ...a, total: 0, quality: 0, ratio: 0 };
-    }
-
-    // 🟩 Xác định class up/down/inactive
-    let classA = "";
-    let classB = "";
-
-    if (!item.a) classA = "inactive";
-    if (!item.b) classB = "inactive";
-
-    if (a && b) {
-      if (a.total > b.total) {
-        classA += " up";
-        classB += " down";
-      } else if (a.total < b.total) {
-        classA += " down";
-        classB += " up";
-      }
-    }
-
-    wrap1.insertAdjacentHTML("beforeend", renderItem(a, classA.trim()));
-    wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
-  });
-}
-
 function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
   if (!g1?.byOwner || !g2?.byOwner)
     return `<p class="warn fade_in_item delay-1">⚠️ Không có dữ liệu Compare cho ${orgName}.</p>`;
@@ -5706,3 +5626,123 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
   </section>`;
 }
 
+function renderCompareToplist(grouped1, grouped2) {
+  const wrap1 = document.querySelector(".compare_ads_1 .dom_toplist");
+  const wrap2 = document.querySelector(".compare_ads_2 .dom_toplist");
+  if (!wrap1 || !wrap2)
+    return console.warn("Không tìm thấy compare_ads_1 hoặc compare_ads_2.");
+
+  wrap1.innerHTML = "";
+  wrap2.innerHTML = "";
+
+  // 🔹 Dựng list
+  const buildList = (grouped) => {
+    const list = [];
+    if (!grouped?.byCampaign) return list;
+    for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
+      for (const [source, mediums] of Object.entries(sources)) {
+        for (const [medium, leads] of Object.entries(mediums)) {
+          const total = leads.length;
+          const needed = leads.filter((l) => l.TagMain === "Needed").length;
+          const considering = leads.filter(
+            (l) => l.TagMain === "Considering"
+          ).length;
+          const quality = needed + considering;
+          const ratio = total ? (quality / total) * 100 : 0;
+          list.push({
+            key: `${campaign}|${source}|${medium}`,
+            campaign,
+            source,
+            medium,
+            total,
+            quality,
+            ratio: +ratio.toFixed(1),
+          });
+        }
+      }
+    }
+    return list;
+  };
+
+  const list1 = buildList(grouped1);
+  const list2 = buildList(grouped2);
+
+  const allKeys = Array.from(
+    new Set([...list1.map((x) => x.key), ...list2.map((x) => x.key)])
+  );
+
+  const getLogo = (key) => {
+    const logo = logos.find((x) => x.match.test(key));
+    return logo
+      ? logo.url
+      : "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
+  };
+
+  const compareList = allKeys.map((key) => {
+    const a = list1.find((x) => x.key === key);
+    const b = list2.find((x) => x.key === key);
+    const diff = (a?.ratio || 0) - (b?.ratio || 0);
+    return { key, a, b, diff, absDiff: Math.abs(diff) };
+  });
+
+  compareList.sort((x, y) => {
+    if (x.a && x.b && y.a && y.b) return y.a.total - x.a.total;
+    if (x.a && !x.b) return 1;
+    if (!x.a && y.b) return 1;
+    return y.absDiff - x.absDiff;
+  });
+
+  const renderItem = (data, cls = "") => {
+    let color = "rgb(0, 177, 72)";
+    if (data.ratio < 20) color = "rgb(225, 112, 85)";
+    else if (data.ratio < 40) color = "rgb(255, 169, 0)";
+    const rgba = color.replace("rgb(", "").replace(")", "");
+    return `
+    <li class="${cls}" data-campaign="${data.campaign}" data-source="${
+      data.source
+    }" data-medium="${data.medium}">
+      <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${
+      data.source
+    } - ${data.medium}</span></p>
+      <p><i class="fa-solid fa-user"></i><span>${data.total}</span></p>
+      <p><i class="fa-solid fa-user-graduate"></i><span>${
+        data.quality
+      }</span></p>
+      <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${
+      data.ratio
+    }%</p>
+    </li>`;
+  };
+
+  compareList.forEach((item) => {
+    let a = item.a;
+    let b = item.b;
+
+    if (!a && b) {
+      a = { ...b, total: 0, quality: 0, ratio: 0 };
+    }
+    if (!b && a) {
+      b = { ...a, total: 0, quality: 0, ratio: 0 };
+    }
+
+    // 🟩 Xác định class up/down/inactive
+    let classA = "";
+    let classB = "";
+
+    if (!item.a) classA = "inactive";
+    if (!item.b) classB = "inactive";
+
+    if (a && b) {
+      if (a.total > b.total) {
+        classA += " up";
+        classB += " down";
+      } else if (a.total < b.total) {
+        classA += " down";
+        classB += " up";
+      }
+    }
+
+    wrap1.insertAdjacentHTML("beforeend", renderItem(a, classA.trim()));
+    wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
+  });
+}
