@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DOM CRM - REPORT</title>
     <link rel="stylesheet" href="./main.css" />
-    <link rel="stylesheet" href="./phone.css" />
+    <!-- <link rel="stylesheet" href="./phone.css" /> -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
@@ -91,7 +91,6 @@
             <i class="fa-solid fa-bars-progress"></i>
             <span>Compare</span>
           </li>
-      
 
           <!-- <li class="" data-view="won">
             <i class="fa-solid fa-graduation-cap"></i>
@@ -118,13 +117,13 @@
           </li> -->
         </ul>
       </div>
-      <div class="dom_container dashboard">
+      <div class="dom_container dashboard detail">
         <div class="dom_header flex">
           <div class="dom_header_time">
             <div class="dom_select time">
               <div class="flex">
                 <i class="fa-solid fa-calendar-days"></i>
-                <p class="dom_selected">This Week</p>
+                <p class="dom_selected">Last 7 days</p>
               </div>
               <i class="fa-solid fa-angle-down"></i>
               <ul class="dom_select_show">
@@ -164,68 +163,21 @@
             </div>
             <p class="dom_date">01/06/2025 - 28/06/2025</p>
           </div>
-          <div class="dom_inner filter">
-            <div class="dom_filter">
-              <div class="toogle_filter box_shadow ai_report">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <p>AI Summary</p>
+          <div class="dom_filter">
+            <div>
+              <div class="dom_select campaign">
+                <div class="flex" data-dropdown-bound="1">
+                  <p class="dom_selected">
+                    <i class="fa-solid fa-bolt"></i> Quick Filter
+                  </p>
+                </div>
+                <i class="fa-solid fa-angle-down"></i>
+                <ul class="dom_select_show"></ul>
               </div>
-              <div>
-                <div class="dom_select campaign">
-                  <div class="flex">
-                    <p class="dom_selected">All campaign</p>
-                  </div>
-                  <i class="fa-solid fa-angle-down"></i>
-                  <ul class="dom_select_show">
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                  </ul>
-                </div>
-                <div class="dom_select source">
-                  <div class="flex">
-                    <p class="dom_selected">All Source</p>
-                  </div>
-                  <i class="fa-solid fa-angle-down"></i>
-                  <ul class="dom_select_show">
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                  </ul>
-                </div>
-                <div class="dom_select medium">
-                  <div class="flex">
-                    <p class="dom_selected">All Medium</p>
-                  </div>
-                  <i class="fa-solid fa-angle-down"></i>
-                  <ul class="dom_select_show">
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                  </ul>
-                </div>
-                <div class="clear_filter">
-                  <i class="fa-solid fa-circle-xmark"></i>
-                </div>
-              </div>
+            </div>
+            <div class="toogle_filter box_shadow ai_report">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <p>AI Summary</p>
             </div>
           </div>
         </div>
@@ -273,26 +225,29 @@
           <div class="dom_row flex um">
             <div class="dom_inner dom_fade_item w20 box_shadow chart">
               <div class="dom_total_report">
-                <img src="./logotarget.png" />
+                <img
+                  src="https://ideas-crm-dashboard.netlify.app/logotarget.png"
+                />
                 <ul>
                   <li>
-                    <span><i class="fa-solid fa-user"></i> Total Lead</span>
+                    <span
+                      ><i class="fa-solid fa-circle-dollar-to-slot"></i>
+                      Spent</span
+                    >
                     <p id="count_lead">
                       <span>...</span>
                     </p>
                   </li>
                   <li>
-                    <span
-                      ><i class="fa-solid fa-tag main_clr"></i> No.1 Tag</span
-                    >
+                    <span><i class="fa-solid fa-street-view"></i> Reach</span>
                     <p id="top_tag">
                       <span></span>
                     </p>
                   </li>
                   <li>
                     <span
-                      ><i class="fa-solid fa-tag main_clr"></i> No.1
-                      Program</span
+                      ><i class="fa-brands fa-facebook-messenger"></i>
+                      Message</span
                     >
                     <p id="top_program">
                       <span></span>
@@ -300,8 +255,8 @@
                   </li>
                   <li>
                     <span
-                      ><i class="fa-solid fa-tag main_clr"></i> No.1
-                      Education</span
+                      ><i class="fa-solid fa-bullseye"></i> Lead
+                      Generation</span
                     >
                     <p id="top_edu">
                       <span></span>
@@ -353,484 +308,228 @@
             </div>
           </div>
           <div class="dom_row flex">
-            <div class="dom_inner dom_fade_item w50">
-              <h2 class="button_group">
-                <p class="active btn-source">Source Detail</p>
-                <p class="btn-campaign">Campaign</p>
-                <p class="toplist_header">
-                  <span></span>
-                  <span>Total </span>
-                  <span>Qualified </span>
-                  <span>%Qualified</span>
-                  <span>View more</span>
-                </p>
-              </h2>
-
-              <div class="dom_toplist_wrap">
-                <ul class="dom_toplist"></ul>
-              </div>
-            </div>
-            <div class="dom_inner dom_fade_item w25 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-bullseye main_clr"></i> Marketing
-                Qualified
-              </h2>
-              <div class="dom_frequency">
-                <div
-                  class="semi-donut margin"
-                  style="--percentage: 0; --fill: #ffa900"
-                >
-                  <p class="frequency_number">0</p>
-                </div>
-                <div class="frequency_number_label">
-                  <p>...</p>
-                  <p>...</p>
-                </div>
-                <div class="dom_frequency_label">
-                  <p>
-                    <b>Needed</b>
-                    <span class="dom_frequency_label_impression">0%</span>
-                  </p>
-                  <p>
-                    <b>Considering</b>
-                    <span class="dom_frequency_label_reach">0%</span>
-                  </p>
+            <div class="dom_inner view_campaign">
+              <div class="view_campaign_header">
+                <div class="campaign_main">
+                  <div class="ads_name">
+                    <p class="ad_name">Ad Name</p>
+                  </div>
+                  <div class="ad_status">Status</div>
+                  <div class="ad_spent">Spent</div>
+                  <div class="ad_result">Result</div>
+                  <div class="ad_cpr">Cost per result</div>
+                  <div class="ad_cpm">CPM</div>
+                  <div class="ad_reach">Reach</div>
+                  <div class="ad_frequency">Frequency</div>
+                  <div class="ad_reaction">Reaction</div>
+                  <div class="campaign_view">Insignht</div>
                 </div>
               </div>
-            </div>
-            <div class="dom_inner dom_fade_item w25 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-chart-pie main_clr"></i> Campaign Pie
-              </h2>
-              <div class="chart-wrapper">
-                <canvas id="pieCampaign"></canvas>
-              </div>
-            </div>
-          </div>
-          <div class="dom_row flex">
-            <div class="dom_inner dom_fade_item w33 box_shadow chart">
-              <h2><i class="fa-solid fa-tags main_clr"></i> Frequency tag</h2>
-              <div class="frequency_tag"></div>
-            </div>
-            <div class="dom_inner dom_fade_item w33 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-tags main_clr"></i> Educational Note
-              </h2>
-              <div class="chart-wrapper">
-                <canvas id="degreeChart"></canvas>
-              </div>
-            </div>
-            <div class="dom_inner dom_fade_item w33 box_shadow chart">
-              <h2><i class="fa-solid fa-tags main_clr"></i> Program Tag</h2>
-              <div class="chart-wrapper">
-                <canvas id="programChart"></canvas>
-              </div>
-            </div>
-          </div>
-          <div class="dom_row table flex">
-            <div class="dom_inner table box_shadow">
-              <div class="dom_table_filter">
-                <h2>
-                  <i class="fa-solid fa-table-list main_clr"></i> Detail Lead:
-                </h2>
-                <div>
-                  <input
-                    class="dom_search"
-                    placeholder="Filter by Email - Phone number - Saleperson"
-                  />
-                  <p id="find_data">Filter</p>
-                </div>
-              </div>
-              <div class="dom_table_box"></div>
+              <div class="view_campaign_box"></div>
             </div>
           </div>
         </div>
-        <div class="dom_sale">
-          <div class="dom_row flex">
-            <!-- <div class="dom_inner box_shadow">
-              <div class="dom_filter">
-                <div>
-                  <i class="fa-solid fa-filter"></i>
-                  <p>Sale filter</p>
-                </div>
-                <div class="dom_select sale">
-                  <div class="flex">
-                    <p class="dom_selected">All sale</p>
-                  </div>
-                  <i class="fa-solid fa-angle-down"></i>
-                  <ul class="dom_select_show">
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Today</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div> -->
-          </div>
-
-          <div class="dom_row flex">
-            <div class="dom_inner w50 box_shadow chart bgw">
-              <div class="dom_table_filter">
-                <h2>
-                  <i class="fa-solid fa-chart-column main_clr"></i> Quality
-                  Saleperson
-                </h2>
-                <div class="dom_select sale_tag_chart">
-                  <div class="flex">
-                    <p class="dom_selected"></p>
-                  </div>
-                  <i class="fa-solid fa-angle-down"></i>
-                  <ul class="dom_select_show">
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Considering</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Bad timing</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Unqualified</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Junk</span>
-                    </li>
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Needed</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div class="chart-wrapper">
-                <canvas id="leadTagChartbySale"></canvas>
-              </div>
-            </div>
-            <div class="dom_inner w50 chart up pd0">
-              <h2 class="button_group">
-                <p class="active">Qualified Lead</p>
-                <p class="toplist_header">
-                  <span></span>
-                  <span>Total </span>
-                  <span>Qualified </span>
-                  <span>%Qualified</span>
-                  <span>Detail Data</span>
-                </p>
-              </h2>
-              <div class="dom_toplist_wrap">
-                <ul class="dom_toplist sale"></ul>
-              </div>
-            </div>
-          </div>
-          <div class="dom_row flex">
-            <div class="dom_inner box_shadow chart bgw">
-              <div class="dom_table_filter">
-                <h2>
-                  <i class="fa-solid fa-graduation-cap main_clr"></i> Saleperson
-                  Chart
-                </h2>
-                <div class="dom_select sale_quality">
-                  <i class="fa-solid fa-chart-area"></i>
-                  <div class="flex">
-                    <p class="dom_selected">Needed</p>
-                  </div>
-                  <i class="fa-solid fa-angle-down"></i>
-                  <ul class="dom_select_show">
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Considering</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Bad timing</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Unqualified</span>
-                    </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Junk</span>
-                    </li>
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Needed</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div style="margin-top: 1.5rem">
-                <canvas id="leadSale"></canvas>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="dom_compare">
-          <div class="dom_header flex">
-            <div class="dom_compare_title mbn">
-              <i class="fa-solid fa-layer-group"></i>Compare
-            </div>
-            <div class="dom_header_time">
-              <div class="dom_select compare">
-                <div class="flex">
-                  <i class="fa-solid fa-calendar-days main_clr"></i>
-                  <p class="dom_selected">Last 7 days</p>
-                </div>
-                <i class="fa-solid fa-angle-down"></i>
-                <ul class="dom_select_show">
-                  <li data-date="today" class="">
-                    <span class="radio_box"></span> <span>Today</span>
-                  </li>
-                  <li data-date="yesterday" class="">
-                    <span class="radio_box"></span> <span>Yesterday</span>
-                  </li>
-                  <li data-date="last_7days" class="active">
-                    <span class="radio_box"></span> <span>Last 7 days</span>
-                  </li>
-                  <li data-date="this_week" class="">
-                    <span class="radio_box"></span> <span>This Week</span>
-                  </li>
-                  <li data-date="last_week" class="">
-                    <span class="radio_box"></span> <span>Last Week</span>
-                  </li>
-                  <li data-date="this_month" class="">
-                    <span class="radio_box"></span> <span>This Month</span>
-                  </li>
-                  <!-- <li data-date="last_month" class="">
-                  <span class="radio_box"></span> <span>Last Month</span>
-                </li>
-                <li data-date="this_year" class="">
-                  <span class="radio_box"></span> <span>This Year</span>
-                </li> -->
-                  <li data-date="custom_range" class="custom_selete">
-                    <span class="radio_box"></span> <span>Custome Date</span>
-                    <div class="custom_date box_shadow">
-                      <p><span>Start</span> <input type="date" id="start" /></p>
-                      <p><span>End</span> <input type="date" id="end" /></p>
-                      <a class="apply_custom_date">Apply</a>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-              <p class="dom_vs_text mbn">Vs</p>
-              <div class="dom_select compare">
-                <div class="flex">
-                  <i class="fa-solid fa-calendar-days sub_clr"></i>
-                  <p class="dom_selected">Previous 7 days</p>
-                </div>
-                <i class="fa-solid fa-angle-down"></i>
-                <ul class="dom_select_show">
-                  <li data-date="yesterday" class="">
-                    <span class="radio_box"></span> <span>Yesterday</span>
-                  </li>
-                  <li data-date="previous_7days" class="">
-                    <span class="radio_box"></span> <span>Previous 7 days</span>
-                  </li>
-                  <li data-date="custom_range" class="custom_selete">
-                    <span class="radio_box"></span> <span>Custome Date</span>
-                    <div class="custom_date box_shadow">
-                      <p><span>Start</span> <input type="date" id="start" /></p>
-                      <p><span>End</span> <input type="date" id="end" /></p>
-                      <a class="apply_custom_date">Apply</a>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-              <p id="compare_btn">Compare</p>
-              <p id="compare_date"></p>
-            </div>
-            <div class="dom_inner filter">
-              <div class="dom_filter">
-                <div class="toogle_filter box_shadow ai_report_compare">
-                  <i class="fa-solid fa-wand-magic-sparkles"></i>
-                  <p>AI Compare</p>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div class="dom_detail">
           <div class="dom_row flex um">
-            <div class="dom_inner w25 box_shadow chart compare_1">
+            <!-- Tổng báo cáo -->
+            <div
+              class="dom_inner dom_fade_item w20 box_shadow chart"
+              id="detail_total_report"
+            >
               <div class="dom_total_report">
-                <img src="./logotarget.png" />
+                <img
+                  src="https://ideas-crm-dashboard.netlify.app/logotarget.png"
+                />
                 <ul>
                   <li>
-                    <span><i class="fa-solid fa-user"></i> Total Lead</span>
-                    <p id="count_lead">
-                      <span>128</span>
-                    </p>
+                    <span
+                      ><i class="fa-solid fa-circle-dollar-to-slot"></i>
+                      Spent</span
+                    >
+                    <p id="detail_spent"><span>...</span></p>
                   </li>
                   <li>
-                    <span><i class="fa-solid fa-circle"></i> %Qualified</span>
-                    <p id="top_tag">50%</p>
-                  </li>
-                  <li>
-                    <span><i class="fa-solid fa-circle"></i> Needed Lead</span>
-                    <p id="top_program">MSc AI UMEF</p>
+                    <span><i class="fa-solid fa-street-view"></i> Reach</span>
+                    <p id="detail_reach"><span>...</span></p>
                   </li>
                   <li>
                     <span
-                      ><i class="fa-solid fa-circle"></i> Considering Lead</span
+                      ><i class="fa-brands fa-facebook-messenger"></i>
+                      Message</span
                     >
-                    <p id="top_edu">Cử nhân</p>
+                    <p id="detail_mess"><span>...</span></p>
+                  </li>
+                  <li>
+                    <span
+                      ><i class="fa-solid fa-bullseye"></i> Lead
+                      Generation</span
+                    >
+                    <p id="detail_lead"><span>...</span></p>
                   </li>
                 </ul>
               </div>
             </div>
-            <div class="dom_inner w50 box_shadow chart compare_trend trendline">
+
+            <!-- Leads Daily Chart -->
+            <div
+              class="dom_inner dom_fade_item w33 box_shadow chart trendline"
+              id="detail_daily_chart_wrap"
+            >
               <div class="dom_table_filter">
                 <h2>
                   <i class="fa-solid fa-chart-line main_clr"></i> Leads Daily
                 </h2>
-              </div>
-              <div>
-                <canvas
-                  id="leadTrendChartCompare"
-                  height="264"
-                  style="
-                    display: block;
-                    box-sizing: border-box;
-                    height: 264px;
-                    width: 412.8px;
-                  "
-                  width="412"
-                ></canvas>
-              </div>
-            </div>
-
-            <div class="dom_inner w25 box_shadow chart compare_2">
-              <div class="dom_total_report">
-                <img src="./compare212.png" />
-                <ul>
-                  <li>
-                    <span><i class="fa-solid fa-user"></i> Total Lead</span>
-                    <p id="count_lead">
-                      <span>128</span>
-                    </p>
-                  </li>
-                  <li>
-                    <span
-                      ><i class="fa-solid fa-circle sub_clr"></i>
-                      %Qualified</span
-                    >
-                    <p id="top_tag">50%</p>
-                  </li>
-                  <li>
-                    <span
-                      ><i class="fa-solid fa-circle sub_clr"></i> Needed
-                      Lead</span
-                    >
-                    <p id="top_program">MSc AI UMEF</p>
-                  </li>
-                  <li>
-                    <span
-                      ><i class="fa-solid fa-circle sub_clr"></i> Considering
-                      Lead</span
-                    >
-                    <p id="top_edu">Cử nhân</p>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div class="dom_row flex">
-            <div class="dom_inner w33 box_shadow chart">
-              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
-              <div class="chart-wrapper">
-                <canvas id="leadTagChartCompare"></canvas>
-              </div>
-            </div>
-            <div class="dom_inner w33 box_shadow chart">
-              <h2>
-                <i class="fa-solid fa-tags main_clr"></i> Educational Note
-              </h2>
-              <div class="chart-wrapper">
-                <div id="degreeChartCompare"></div>
-              </div>
-            </div>
-            <div class="dom_inner w33 box_shadow chart">
-              <h2><i class="fa-solid fa-tags main_clr"></i> Program Tag</h2>
-              <div class="chart-wrapper">
-                <canvas id="programChartCompare"></canvas>
-              </div>
-            </div>
-          </div>
-          <div class="dom_row flex compare_scroll_wrap">
-            <div class="dom_inner compare_ads_1 w50">
-              <h2 class="button_group">
-                <p class="btn-source rang1">Source Data Rang 1</p>
-                <p class="toplist_header">
-                  <span></span>
-                  <span>Total </span>
-                  <span>Qualified </span>
-                  <span>%Qualified</span>
-                </p>
-              </h2>
-
-              <div class="dom_toplist_wrap">
-                <ul class="dom_toplist"></ul>
-              </div>
-            </div>
-            <div class="dom_inner compare_ads_2 w50">
-              <h2 class="button_group">
-                <p class="btn-source rang2">Source Data Rang 2</p>
-                <p class="toplist_header">
-                  <span></span>
-                  <span>Total </span>
-                  <span>Qualified </span>
-                  <span>%Qualified</span>
-                </p>
-              </h2>
-
-              <div class="dom_toplist_wrap">
-                <ul class="dom_toplist"></ul>
-              </div>
-            </div>
-          </div>
-          <div class="dom_row flex">
-            <div class="dom_inner w50 box_shadow chart bgw">
-              <h2>
-                <i class="fa-solid fa-user main_clr"></i> Saleperson Total Leads
-              </h2>
-              <div class="chart-wrapper">
-                <canvas id="leadSaleCompare"></canvas>
-              </div>
-            </div>
-
-            <div class="dom_inner w50 box_shadow chart bgw">
-              <div class="dom_table_filter">
-                <h2>
-                  <i class="fa-solid fa-chart-column main_clr"></i>
-                  Saleperson Quality Tags
-                </h2>
-                <div class="dom_select sale_tag_chart_compare">
+                <div class="dom_select daily">
+                  <i class="fa-solid fa-chart-area"></i>
                   <div class="flex">
-                    <p class="dom_selected"></p>
+                    <p class="dom_selected show">Lead</p>
                   </div>
                   <i class="fa-solid fa-angle-down"></i>
                   <ul class="dom_select_show">
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Considering</span>
+                    <li data-type="lead">
+                      <span class="radio_box"></span> <span>Lead</span>
                     </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Bad timing</span>
+                    <li data-type="reach">
+                      <span class="radio_box"></span> <span>Reach</span>
                     </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Unqualified</span>
+                    <li data-type="message">
+                      <span class="radio_box"></span> <span>Message</span>
                     </li>
-                    <li data-date="today" class="">
-                      <span class="radio_box"></span> <span>Junk</span>
-                    </li>
-                    <li data-date="today" class="active">
-                      <span class="radio_box"></span> <span>Needed</span>
+                    <li data-type="spend">
+                      <span class="radio_box"></span> <span>Spent</span>
                     </li>
                   </ul>
                 </div>
               </div>
+              <div>
+                <canvas id="detail_spent_chart"></canvas>
+              </div>
+            </div>
+
+            <!-- Quality -->
+            <div
+              class="dom_inner dom_fade_item w25 box_shadow chart"
+              id="detail_quality_chart"
+            >
+              <h2><i class="fa-solid fa-chart-simple main_clr"></i> Quality</h2>
+              <div class="interaction">
+                Các chi số like, share, comment, save post, page like, link
+                clicks, photo view, video view
+              </div>
+            </div>
+          </div>
+
+          <!-- Adset Actions Charts -->
+          <div class="dom_row">
+            <div class="dom_detail_ad">
+              <div class="dom_inner dom_fade_item w50 box_shadow chart show">
+                <h2>
+                  <i class="fa-solid fa-tags main_clr"></i>
+                  fetchAdsetActionsByHour
+                </h2>
+                <div class="chart-wrapper">
+                  <canvas id="chart_by_hour"></canvas>
+                </div>
+              </div>
+
+              <!-- Targeting -->
+              <div class="detail_set" id="detail_targeting">
+                <div class="detail_gender">
+                  <div>
+                    <h2>Targeting</h2>
+                  </div>
+                  <p class="detail_text">Age</p>
+                  <div class="detail_age_bar">
+                    <div>
+                      <p>18</p>
+                      <p>65</p>
+                    </div>
+                    <div></div>
+                  </div>
+                  <p class="detail_text">Gender</p>
+                  <div class="detail_gender_bar">
+                    <p>Nam</p>
+                    <p>Nữ</p>
+                    <p>Khác</p>
+                  </div>
+                  <p class="detail_text">Optimize</p>
+                  <div class="detail_gender_bar"><p>Anvatage +</p></div>
+                </div>
+                <div class="detail_gender">
+                  <p class="detail_text">Location</p>
+                  <div class="detail_location_bar"></div>
+                  <p class="detail_text">Interest - Behavior</p>
+                  <div class="frequency_tag">
+                    <p class="freq_tag_item">
+                      <span class="tag_dot"></span>
+                      <span class="tag_name">Standard</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Các chart khác -->
+          <div class="dom_row">
+            <div
+              class="dom_inner dom_fade_item w33 box_shadow chart show"
+              id="chart_daily_insights"
+            >
+              <h2>
+                <i class="fa-solid fa-tags main_clr"></i> fetchAdDailyInsights
+              </h2>
               <div class="chart-wrapper">
-                <canvas id="leadTagChartbySaleCompare"></canvas>
+                <canvas id="canvas_daily_insights"></canvas>
+              </div>
+            </div>
+
+            <div class="dom_inner dom_fade_item w33 box_shadow chart show">
+              <h2>
+                <i class="fa-solid fa-tags main_clr"></i>
+                fetchAdsetActionsByDevice
+              </h2>
+              <div class="chart-wrapper">
+                <canvas id="chart_by_device"></canvas>
+              </div>
+            </div>
+
+            <div class="dom_inner dom_fade_item w33 box_shadow chart show">
+              <h2>
+                <i class="fa-solid fa-tags main_clr"></i>
+                fetchAdsetActionsByPlatformPosition
+              </h2>
+              <div class="chart-wrapper">
+                <canvas id="chart_by_platform"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="dom_row">
+            <div class="dom_inner dom_fade_item w33 box_shadow chart show">
+              <h2>
+                <i class="fa-solid fa-tags main_clr"></i>
+                fetchAdsetActionsByRegion
+              </h2>
+              <div class="chart-wrapper">
+                <canvas id="chart_by_region"></canvas>
+              </div>
+            </div>
+            <div
+              class="dom_inner dom_fade_item w33 box_shadow chart show"
+              id="chart_by_agegender"
+            >
+              <h2>
+                <i class="fa-solid fa-tags main_clr"></i>
+                fetchAdsetActionsByAgeGender
+              </h2>
+              <div class="chart-wrapper">
+                <canvas id="chart_by_age_gender"></canvas>
               </div>
             </div>
           </div>
         </div>
+
         <div class="dom_ai_report">
           <i class="fa-solid fa-xmark dom_ai_report_close"></i>
           <h3><i class="fa-solid fa-robot"></i> REPORT FOR -</h3>
@@ -843,10 +542,6 @@
           <h5><i class="fa-solid fa-angles-left"></i> Click to return</h5>
         </div>
         <div class="dom_overlay_ai"></div>
-        <!-- <p class="dom_overlay_ai_text">
-          <span class="loader_ai"></span>
-          <span> </span>
-        </p> -->
       </div>
     </section>
     <div class="dom_accounts">
@@ -871,7 +566,6 @@
       <span class="loader"></span>
     </div>
   </body>
-  <script src="./main2.js?123"></script>
+  <script src="./setup.js"></script>
+  <script src="./main.js"></script>
 </html>
-
-
