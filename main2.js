@@ -1562,6 +1562,8 @@ function applyFilter(type, value) {
 // FILTER DATA LOGIC
 // ============================
 function setupLeadSearch() {
+  const currentAccount =
+      localStorage.getItem("selectedAccount") || "Total Data";
   const input = qsc(".dom_search");
   const btn = qsc("#find_data");
   if (!input || !btn) return;
@@ -1572,11 +1574,20 @@ function setupLeadSearch() {
       renderLeadTable(RAW_DATA);
       return;
     }
-    const filtered = RAW_DATA.filter((l) => {
-      const phone = (l.Mobile || "").toLowerCase();
-      const owner = (l.OwnerIDText || "").toLowerCase();
-      return phone.includes(keyword) || owner.includes(keyword);
-    });
+    let filtered 
+    if(currentAccount !== "Total Data") {
+       filtered = RAW_DATA.filter((l) => {
+        const phone = (l.Mobile || "").toLowerCase();
+        const owner = (l.OwnerIDText || "").toLowerCase();
+        return phone.includes(keyword) || owner.includes(keyword);
+      });
+    } else {
+       filtered = ACCOUNT_DATA.filter((l) => {
+        const phone = (l.Mobile || "").toLowerCase();
+        const owner = (l.OwnerIDText || "").toLowerCase();
+        return phone.includes(keyword) || owner.includes(keyword);
+      });
+    }
     renderLeadTable(filtered);
     if (!filtered.length) {
       const c = qsc(".dom_table_box");
