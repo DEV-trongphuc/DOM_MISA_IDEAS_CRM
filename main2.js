@@ -1098,7 +1098,11 @@ async function processAndRenderAll(data, isLoad) {
   if (!data?.length) return;
 
   GROUPED = await processCRMData(data);
-  if (isLoad) ACCOUNT_DATA = data;
+  if (isLoad) {
+    ACCOUNT_DATA = data;
+  } else {
+    ACCOUNT_DATA = null;
+  }
 
   scheduleIdle(() => renderChartsSmoothly(GROUPED), 80);
   scheduleRAF(() => {
@@ -3787,7 +3791,12 @@ function renderToplistBySale(grouped) {
 
 // 🔹 Filter sale chính xác tên clean
 function filterBySaleExact(saleName) {
-  const group = processCRMData(RAW_DATA);
+  let group;
+  if (ACCOUNT_DATA) {
+    group = processCRMData(ACCOUNT_DATA);
+  } else {
+    group = processCRMData(RAW_DATA);
+  }
   if (!group?.byOwner) return [];
   const matchedSales = Object.keys(group.byOwner).filter(
     (owner) => owner.replace(/\(NV.*?\)/gi, "").trim() === saleName
