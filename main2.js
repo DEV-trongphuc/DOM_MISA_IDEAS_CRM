@@ -1098,11 +1098,7 @@ async function processAndRenderAll(data, isLoad) {
   if (!data?.length) return;
 
   GROUPED = await processCRMData(data);
-  if (isLoad) {
-    ACCOUNT_DATA = data;
-  } else {
-    ACCOUNT_DATA = null;
-  }
+  if (isLoad) ACCOUNT_DATA = data;
 
   scheduleIdle(() => renderChartsSmoothly(GROUPED), 80);
   scheduleRAF(() => {
@@ -3790,13 +3786,14 @@ function renderToplistBySale(grouped) {
 }
 
 // 🔹 Filter sale chính xác tên clean
-function filterBySaleExact(saleName) {
+function filterBySaleExact(saleName, account) {
   let group;
-  if (ACCOUNT_DATA) {
+  if (account !== "Total Data") {
     group = processCRMData(ACCOUNT_DATA);
   } else {
     group = processCRMData(RAW_DATA);
   }
+
   if (!group?.byOwner) return [];
   const matchedSales = Object.keys(group.byOwner).filter(
     (owner) => owner.replace(/\(NV.*?\)/gi, "").trim() === saleName
@@ -3838,7 +3835,7 @@ function renderSaleDropdown() {
 
     // Click chọn sale từ dropdown
     li.addEventListener("click", () => {
-      const leads = filterBySaleExact(name);
+      const leads = filterBySaleExact(name, currentAccount);
       processAndRenderAll(leads);
       const saleDetailUI = dropdown.closest(".sale_report");
       const img = saleDetailUI.querySelector("img");
