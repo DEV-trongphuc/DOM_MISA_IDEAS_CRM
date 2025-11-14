@@ -1563,7 +1563,7 @@ function applyFilter(type, value) {
 // ============================
 function setupLeadSearch() {
   const currentAccount =
-      localStorage.getItem("selectedAccount") || "Total Data";
+    localStorage.getItem("selectedAccount") || "Total Data";
   const input = qsc(".dom_search");
   const btn = qsc("#find_data");
   if (!input || !btn) return;
@@ -1574,15 +1574,15 @@ function setupLeadSearch() {
       renderLeadTable(RAW_DATA);
       return;
     }
-    let filtered 
-    if(currentAccount !== "Total Data") {
-       filtered = RAW_DATA.filter((l) => {
+    let filtered;
+    if (currentAccount !== "Total Data") {
+      filtered = RAW_DATA.filter((l) => {
         const phone = (l.Mobile || "").toLowerCase();
         const owner = (l.OwnerIDText || "").toLowerCase();
         return phone.includes(keyword) || owner.includes(keyword);
       });
     } else {
-       filtered = ACCOUNT_DATA.filter((l) => {
+      filtered = ACCOUNT_DATA.filter((l) => {
         const phone = (l.Mobile || "").toLowerCase();
         const owner = (l.OwnerIDText || "").toLowerCase();
         return phone.includes(keyword) || owner.includes(keyword);
@@ -2748,10 +2748,10 @@ function renderCampaignPieChart(grouped) {
   const ctx = document.getElementById("pieCampaign");
   if (!ctx) return;
 
+  // 🧮 Gom label + data
   const labels = [];
   const values = [];
 
-  // 🧮 Tính tổng lead của từng campaign
   for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
     let count = 0;
     for (const src of Object.values(sources)) {
@@ -2760,105 +2760,123 @@ function renderCampaignPieChart(grouped) {
       }
     }
     labels.push(campaign);
-    values.push(count);
+    values.push(Number(count));
   }
 
-  // 🎨 Bảng màu chính + phụ
-  const mainPalette = [
-    "#ffa900", // vàng
-    "#262a53", // xanh than
-    "#cccccc", // xám
-    "#e17055", // cam
+  // Không có data → không vẽ
+  if (!values.length || values.every((v) => v === 0)) return;
+
+  // 🌈 Màu sắc (same vibe như device chart)
+  const highlightColors = [
+    "rgba(255,171,0,0.9)", // vàng
+    "rgba(156,163,175,0.7)", // xám nhạt
+  ];
+  const fallbackColors = [
+    "rgba(38,42,83,0.9)", // xanh đậm
+    "rgba(0, 59, 59, 0.7)",
+    "rgba(0, 71, 26, 0.7)",
+    "rgba(153, 0, 0, 0.7)",
+    "rgba(52, 31, 151, 0.7)",
+    "rgba(0, 94, 124, 0.7)",
   ];
 
-  const extraPalette = [
-    "#74b9ff",
-    "#a29bfe",
-    "#55efc4",
-    "#fab1a0",
-    "#fdcb6e",
-    "#81ecec",
-    "#b2bec3",
-  ];
+  const colors = values.map((_, i) =>
+    i < 2 ? highlightColors[i] : fallbackColors[i - 2] || "#ccc"
+  );
 
-  // ✅ Tạo bảng màu theo số lượng campaign
-  const colors = [...mainPalette, ...extraPalette];
-  const bgColors = labels.map((_, i) => colors[i % colors.length] + "cc"); // 80% opacity
-  const borderColors = labels.map((_, i) => colors[i % colors.length]);
   const total = values.reduce((a, b) => a + b, 0);
 
-  // 🔄 Update nếu chart đã tồn tại
+  // 🎯 Tìm campaign chiếm % cao nhất
+  const maxIndex = values.indexOf(Math.max(...values));
+  const maxLabel = labels[maxIndex];
+  const maxPercent = ((values[maxIndex] / total) * 100).toFixed(1);
+
+  // 🔵 Center plugin (hiện % ngay giữa lỗ)
+  const centerTextPlugin = {
+    id: "centerText",
+    afterDraw(chart) {
+      const { width, height } = chart;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#333";
+
+      const centerY = height / 2 - 18;
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText(`${maxPercent}%`, width / 2, centerY - 4);
+
+      ctx.font = "12px sans-serif";
+      ctx.fillText(maxLabel, width / 2, centerY + 18);
+      ctx.restore();
+    },
+  };
+
+  // 🔄 Chart đã tồn tại → destroy tạo mới
   if (window.campaignPieInstance) {
-    const chart = window.campaignPieInstance;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = bgColors;
-    chart.data.datasets[0].borderColor = borderColors;
-    chart.update("active");
-    return;
+    window.campaignPieInstance.destroy();
+    window.campaignPieInstance = null;
   }
 
-  // 🚀 Vẽ Pie Chart
+  // 🥯 Render Donut Chart
   window.campaignPieInstance = new Chart(ctx, {
-    type: "pie",
+    type: "doughnut",
     data: {
       labels,
       datasets: [
         {
           label: "Campaign Share",
           data: values,
-          backgroundColor: bgColors,
-          borderColor: borderColors,
-          borderWidth: 1.5,
+          backgroundColor: colors,
+          borderColor: "#fff",
+          borderWidth: 2,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: 10 },
-      animation: {
-        duration: 900,
-        easing: "easeOutQuart",
-      },
+      cutout: "70%", // 🥯 Donut hole
       plugins: {
         legend: {
-          position: "bottom", // ✅ canh bên phải
-          align: "center",
+          position: "bottom",
           labels: {
-            boxWidth: 8,
+            boxWidth: 12,
             padding: 10,
             color: "#333",
-            font: { size: 11, weight: "500" },
           },
         },
         tooltip: {
           callbacks: {
             label: (ctx) => {
-              const value = ctx.parsed;
-              const percent =
-                total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-              return `${ctx.label}: ${value} (${percent}%)`;
+              const dataset = ctx.chart.data.datasets[0].data;
+              const total = dataset.reduce((a, b) => a + b, 0);
+              const percent = ((ctx.raw / total) * 100).toFixed(1);
+
+              return `${ctx.label}: ${ctx.raw} (${percent}%)`;
             },
           },
         },
         datalabels: {
           color: "#fff",
           font: { size: 10, weight: "600" },
-          formatter: (value) => {
-            const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-            return percent > 3 ? `${percent}%` : "";
+          formatter: (value, ctx) => {
+            const dataset = ctx.chart.data.datasets[0].data;
+            const total = dataset.reduce((a, b) => a + b, 0);
+            const percent = ((value / total) * 100).toFixed(1);
+            return percent >= 4 ? `${percent}%` : "";
           },
           anchor: "end",
           align: "end",
           offset: 4,
-          clip: false,
         },
       },
+      hoverOffset: 8,
     },
-    plugins: [ChartDataLabels],
+    plugins: [ChartDataLabels, centerTextPlugin],
   });
 }
+
 function renderLeadSaleChart(grouped, tagFilter = "Needed") {
   if (!grouped?.byOwner) return;
   const ctx = document.getElementById("leadSale");
@@ -2872,11 +2890,23 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
   for (let i = 0; i < entries.length; i++) {
     const [owner, data] = entries[i];
     labels[i] = owner.replace(/\s*\(NV.*?\)/gi, "").trim();
-    totalCounts[i] = data.total || 0;
-    tagCounts[i] = data.tags?.[tagFilter]?.count || 0;
+    totalCounts[i] = Number(data.total || 0);
+    tagCounts[i] = Number(data.tags?.[tagFilter]?.count || 0);
   }
 
-  const maxValue = Math.max(...totalCounts, ...tagCounts);
+  // Nếu không có data hữu dụng thì thôi
+  if (
+    !labels.length ||
+    (totalCounts.every((v) => v === 0) && tagCounts.every((v) => v === 0))
+  ) {
+    if (window.leadSaleChartInstance) {
+      window.leadSaleChartInstance.destroy();
+      window.leadSaleChartInstance = null;
+    }
+    return;
+  }
+
+  const maxValue = Math.max(...totalCounts, ...tagCounts, 1);
   const tagColor = "rgba(38,42,83,0.8)",
     totalColor = "rgba(255,171,0,0.8)";
 
@@ -2896,10 +2926,20 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
       inst.data.datasets[1].label = `${tagFilter} Leads`;
       changed = true;
     }
-    if (changed) inst.update("active");
+
+    // Nếu có thay đổi, cập nhật lại chart và return
+    if (changed) {
+      // Cập nhật scale ticks nếu cần (để tick step hợp lý)
+      if (inst.options && inst.options.scales && inst.options.scales.y) {
+        inst.options.scales.y.ticks.stepSize =
+          Math.ceil(Math.max(...totalCounts, ...tagCounts) / 4) || 1;
+      }
+      inst.update("active");
+    }
     return;
   }
 
+  // Tạo mới chart
   window.leadSaleChartInstance = new Chart(ctx.getContext("2d"), {
     type: "bar",
     data: {
@@ -2933,20 +2973,56 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
         tooltip: {
           callbacks: {
             label: (c) => {
-              const total = totalCounts[c.dataIndex] || 0,
-                cnt = c.parsed.y || 0;
-              const pct = total > 0 ? ((cnt / total) * 100).toFixed(1) : 0;
-              return `${
-                c.dataset.label
-              }: ${cnt.toLocaleString()} leads (${pct}%)`;
+              const chart = c.chart;
+
+              const totalDataset = chart.data.datasets[0].data; // total per sale
+              const tagDataset = chart.data.datasets[1].data; // tag per sale
+
+              const totalAllSales = totalDataset.reduce((a, b) => a + b, 0);
+
+              const totalOfSale = Number(totalDataset[c.dataIndex] || 0);
+              const tagOfSale = Number(tagDataset[c.dataIndex] || 0);
+
+              // % theo từng sale (tagFilter)
+              const pctTag =
+                totalOfSale > 0
+                  ? ((tagOfSale / totalOfSale) * 100).toFixed(1)
+                  : "0.0";
+
+              // % tổng toàn bộ sale (total leads)
+              const pctTotalAll =
+                totalAllSales > 0
+                  ? ((totalOfSale / totalAllSales) * 100).toFixed(1)
+                  : "0.0";
+
+              if (c.datasetIndex === 0) {
+                // Total Leads column
+                return `Total Leads: ${totalOfSale.toLocaleString()} (${pctTotalAll}%)`;
+              } else {
+                // Tag Filter column
+                return `${
+                  c.dataset.label
+                }: ${tagOfSale.toLocaleString()} (${pctTag}%)`;
+              }
             },
           },
         },
+
         datalabels: {
           anchor: "end",
           align: "end",
           font: { weight: "bold", size: 12 },
-          formatter: (v) => (v > 0 ? v : ""),
+          formatter: (v, ctx) => {
+            // Nếu muốn hiển thị % trên datalabel, tính theo chart data
+            // Hiện giữ nguyên là số, nhưng có thể đổi sang % bằng cách mở comment dưới
+            return v > 0 ? v : "";
+            /*
+            const chart = ctx.chart;
+            const total = Number((chart.data.datasets[0] && chart.data.datasets[0].data[ctx.dataIndex]) || 0);
+            const pct = total ? ((v / total) * 100).toFixed(1) : "0.0";
+            return v > 0 ? `${v} (${pct}%)` : "";
+            */
+          },
         },
       },
       scales: {
@@ -2957,7 +3033,10 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
         y: {
           beginAtZero: true,
           grid: { color: "rgba(0,0,0,0.05)" },
-          ticks: { color: "#666", stepSize: Math.ceil(maxValue / 4) || 1 },
+          ticks: {
+            color: "#666",
+            stepSize: Math.ceil(maxValue / 4) || 1,
+          },
           afterDataLimits: (s) => (s.max *= 1.1),
         },
       },
