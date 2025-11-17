@@ -318,7 +318,7 @@ async function fetchLeads(from, to) {
     }
 
     // 🔹 2️⃣ Còn nếu lần đầu (chưa xác thực)
-    token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+    token = await getToken("numt@ideas.edu.vn", "Ideas@812");
     console.log("🔑 Token hiện tại:", token.slice(0, 20) + "...");
 
     data = await fetchLeadData(from, to, token);
@@ -5842,3 +5842,4 @@ function renderCompareToplist(grouped1, grouped2) {
     wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
   });
 }
+
