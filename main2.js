@@ -162,13 +162,26 @@ async function quickLogin() {
     }
   }
 
-  // Lấy token mới từ step CRM
+  // Fetch new token
   const res = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
     method: "POST",
   });
-  const data = await res.json();
-  const token = data?.Data?.token;
-  const expires = data?.Data?.expires;
+
+  let data = null;
+
+  // 👇 Chống lỗi JSON parse
+  try {
+    data = await res.json();
+  } catch (e) {
+    console.warn("⚠️ API trả về không phải JSON:", e);
+    return null;
+  }
+
+  console.log("API QuickLogin:", data);
+
+  // 👇 Hỗ trợ cả 2 dạng response
+  const token = data?.Data?.token ?? data?.token;
+  const expires = data?.Data?.expires ?? data?.expires;
 
   if (token && expires) {
     localStorage.setItem("misa_token", token);
@@ -228,9 +241,9 @@ async function loginFlow(username, password) {
 async function getToken(username, password, forceLogin = false) {
   if (!forceLogin) {
     const quick = await quickLogin();
+
     if (quick) return quick;
   }
-
   try {
     const login = await loginFlow(username, password);
     if (login?.token) return login.token;
@@ -241,6 +254,7 @@ async function getToken(username, password, forceLogin = false) {
   const manual = prompt("Nhập token MISA:");
   if (!manual) throw new Error("Không có token MISA");
   localStorage.setItem("misa_token", manual);
+
   return manual;
 }
 
@@ -318,7 +332,9 @@ async function fetchLeads(from, to) {
     }
 
     // 🔹 2️⃣ Còn nếu lần đầu (chưa xác thực)
+    console.log("token");
     token = await getToken("numt@ideas.edu.vn", "Ideas@812");
+    console.log(token);
     console.log("🔑 Token hiện tại:", token.slice(0, 20) + "...");
 
     data = await fetchLeadData(from, to, token);
@@ -329,6 +345,7 @@ async function fetchLeads(from, to) {
       localStorage.removeItem("misa_token");
 
       const quick = await quickLogin();
+
       if (quick) {
         token = quick;
         data = await fetchLeadData(from, to, token);
@@ -340,7 +357,7 @@ async function fetchLeads(from, to) {
       console.warn("⚠️ quickLogin thất bại → loginFlow OTP...");
       localStorage.removeItem("misa_token");
 
-      token = await getToken("numt@ideas.edu.vn", "Ideas123456", true);
+      token = await getToken("numt@ideas.edu.vn", "Ideas@812", true);
       data = await fetchLeadData(from, to, token);
     }
 
@@ -5842,4 +5859,3 @@ function renderCompareToplist(grouped1, grouped2) {
     wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
   });
 }
-
