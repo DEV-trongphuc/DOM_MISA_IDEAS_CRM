@@ -1193,7 +1193,7 @@ tbody {
   align-items: center;
   gap: 1rem;
 }
-#find_data {
+#find_data, #export_table{
   background-color: var(--mainClr);
   font-weight: bold;
   color: white;
@@ -1205,6 +1205,7 @@ tbody {
 #find_data:hover {
   opacity: 0.8;
 }
+
 
 .loading {
   position: fixed;
@@ -2353,3 +2354,4 @@ tbody {
 .dom_sidebar .dom_logo i {
   display: none;
 }
+
