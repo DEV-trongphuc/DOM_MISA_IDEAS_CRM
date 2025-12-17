@@ -2682,9 +2682,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("click", async (e) => {});
 
 document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("export_table")?.addEventListener("click", () => {
-    exportLeadsToCSV(leads);
-  });
+
 
   const btnSource = document.querySelector(".button_group .btn-source");
   const btnCampaign = document.querySelector(".button_group .btn-campaign");
@@ -3081,6 +3079,9 @@ function maskMobile(mobile) {
 }
 
 function renderLeadTable(leads) {
+  document.getElementById("export_table")?.addEventListener("click", () => {
+    exportLeadsToCSV(leads);
+  });
   const container = document.querySelector(".dom_table_box");
   if (!container) return;
 
