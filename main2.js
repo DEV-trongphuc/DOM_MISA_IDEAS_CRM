@@ -3255,6 +3255,7 @@ function exportLeadsToCSV(leads) {
     "Created Date",
     "Lead Name",
     "Mobile",
+    "Email",
     "Owner",
     "Tags",
     "Campaign",
@@ -3270,6 +3271,7 @@ function exportLeadsToCSV(leads) {
     l.CreatedDate ? new Date(l.CreatedDate).toLocaleDateString("vi-VN") : "",
     l.LeadName || "",
     l.Mobile || "",
+    l.CustomField18 || "",
     l.OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "",
     l.TagIDText || "",
     l.CustomField13Text || "",
@@ -5916,3 +5918,4 @@ function renderCompareToplist(grouped1, grouped2) {
     wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
   });
 }
+
