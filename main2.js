@@ -1249,6 +1249,9 @@ function processCRMData(data) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("export_table")?.addEventListener("click", () => {
+    exportLeadsToCSV(CRM_DATA);
+  });
   const menuItems = document.querySelectorAll(".dom_menu li");
   const container = document.querySelector(".dom_container");
   const mobile_menu = document.querySelector("#mobile_menu");
@@ -3079,9 +3082,7 @@ function maskMobile(mobile) {
 }
 
 function renderLeadTable(leads) {
-  document.getElementById("export_table")?.addEventListener("click", () => {
-    exportLeadsToCSV(leads);
-  });
+
   const container = document.querySelector(".dom_table_box");
   if (!container) return;
 
