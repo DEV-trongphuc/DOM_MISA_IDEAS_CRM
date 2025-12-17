@@ -2217,10 +2217,10 @@ function setupTimeDropdown() {
 
     const startDate = new Date(start);
     const endDate = new Date(end);
-    const minDate = new Date("2025-10-01");
+    const minDate = new Date("2025-08-01");
 
     if (startDate < minDate)
-      return alert("⚠️ Ngày bắt đầu không được trước 01/10/2025!");
+      return alert("⚠️ Ngày bắt đầu không được trước 01/08/2025!");
     if (endDate <= startDate)
       return alert("⚠️ Ngày kết thúc phải sau ngày bắt đầu!");
 
@@ -2682,6 +2682,10 @@ document.addEventListener("click", (e) => {
 document.addEventListener("click", async (e) => {});
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("export_table")?.addEventListener("click", () => {
+    exportLeadsToCSV(leads);
+  });
+
   const btnSource = document.querySelector(".button_group .btn-source");
   const btnCampaign = document.querySelector(".button_group .btn-campaign");
 
@@ -3238,6 +3242,57 @@ function renderLeadTable(leads) {
       });
     }
   });
+}
+function exportLeadsToCSV(leads) {
+  if (!Array.isArray(leads) || leads.length === 0) {
+    alert("No data to export");
+    return;
+  }
+
+  const headers = [
+    "Created Date",
+    "Lead Name",
+    "Mobile",
+    "Owner",
+    "Tags",
+    "Campaign",
+    "Source",
+    "Medium",
+    "Organization",
+    "Description",
+  ];
+
+  const escapeCSV = (val = "") => `"${String(val).replace(/"/g, '""')}"`;
+
+  const rows = leads.map((l) => [
+    l.CreatedDate ? new Date(l.CreatedDate).toLocaleDateString("vi-VN") : "",
+    l.LeadName || "",
+    l.Mobile || "",
+    l.OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "",
+    l.TagIDText || "",
+    l.CustomField13Text || "",
+    l.CustomField14Text || "",
+    l.CustomField15Text || "",
+    l.CustomField16Text || "",
+    l.Description || "",
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((row) => row.map(escapeCSV).join(","))
+    .join("\n");
+
+  const blob = new Blob(["\ufeff" + csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `leads_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function setupTagClick() {
