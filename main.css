@@ -1529,6 +1529,27 @@ tbody {
   font-size: 1.5rem;
   letter-spacing: 1px;
 }
+#contact_support_zalo {
+  display: block;
+  margin-top: 1.5rem;
+  padding: 1.2rem;
+  background-color: rgba(0, 104, 255, 0.1);
+  color: #0068ff;
+  border-radius: 5px;
+  text-align: center;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 1.3rem;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 104, 255, 0.3);
+}
+#contact_support_zalo:hover {
+  background-color: #0068ff;
+  color: white;
+}
+#contact_support_zalo i {
+  margin-right: 0.5rem;
+}
 .dom_accounts_overlay,
 .dom_alert_overlay {
   position: fixed;
