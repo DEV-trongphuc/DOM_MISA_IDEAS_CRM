@@ -130,42 +130,64 @@
                 <p class="dom_selected">Last 7 days</p>
               </div>
               <i class="fa-solid fa-angle-down"></i>
-              <ul class="dom_select_show">
-                <li data-date="today" class="">
-                  <span class="radio_box"></span> <span>Today</span>
-                </li>
-                <li data-date="yesterday" class="">
-                  <span class="radio_box"></span> <span>Yesterday</span>
-                </li>
-                <li data-date="last_7days" class="active">
-                  <span class="radio_box"></span> <span>Last 7 days</span>
-                </li>
-                <li data-date="this_week" class="">
-                  <span class="radio_box"></span> <span>This Week</span>
-                </li>
-                <li data-date="last_week" class="">
-                  <span class="radio_box"></span> <span>Last Week</span>
-                </li>
-                <li data-date="this_month" class="">
-                  <span class="radio_box"></span> <span>This Month</span>
-                </li>
-                <!-- <li data-date="last_month" class="">
-                  <span class="radio_box"></span> <span>Last Month</span>
-                </li>
-                <li data-date="this_year" class="">
-                  <span class="radio_box"></span> <span>This Year</span>
-                </li> -->
-                <li data-date="custom_range" class="custom_selete">
-                  <span class="radio_box"></span> <span>Custome Date</span>
-                  <div class="custom_date box_shadow">
-                    <p><span>Start</span> <input type="date" id="start" /></p>
-                    <p><span>End</span> <input type="date" id="end" /></p>
-                    <a class="apply_custom_date">Apply</a>
+              <div class="dom_select_show time_picker_panel">
+                <div class="time_picker_sidebar">
+                  <ul>
+                    <li data-date="today">
+                      <span class="radio_box"></span> <span>Today</span>
+                    </li>
+                    <li data-date="yesterday">
+                      <span class="radio_box"></span> <span>Yesterday</span>
+                    </li>
+                    <li data-date="last_7days" class="active">
+                      <span class="radio_box"></span> <span>Last 7 days</span>
+                    </li>
+                    <li data-date="last_30days">
+                      <span class="radio_box"></span> <span>Last 30 days</span>
+                    </li>
+                    <li data-date="this_week">
+                      <span class="radio_box"></span> <span>This Week</span>
+                    </li>
+                    <li data-date="last_week">
+                      <span class="radio_box"></span> <span>Last Week</span>
+                    </li>
+                    <li data-date="this_month">
+                      <span class="radio_box"></span> <span>This Month</span>
+                    </li>
+                    <li data-date="last_month">
+                      <span class="radio_box"></span> <span>Last Month</span>
+                    </li>
+                    <li data-date="custom_range">
+                      <span class="radio_box"></span> <span>Custom Date</span>
+                    </li>
+                  </ul>
+                </div>
+                <div class="time_picker_content">
+                  <div class="time_picker_header">
+                    <h3>Select Date Range</h3>
                   </div>
-                </li>
-              </ul>
+                  <div class="calendar_container">
+                    <div class="calendar_card" id="calendar_left">
+                      <!-- Rendered by JS -->
+                    </div>
+                  </div>
+                  <div class="time_picker_footer">
+                    <div class="picker_inputs">
+                      <input type="date" id="start_date_val" />
+                      <span>-</span>
+                      <input type="date" id="end_date_val" />
+                    </div>
+                    <div class="picker_actions">
+                      <button class="btn_cancel">Cancel</button>
+                      <button class="btn_update apply_custom_date">
+                        Update
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <p class="dom_date">01/06/2025 - 28/06/2025</p>
+            <p class="dom_date">-/-/- - -/-/-</p>
           </div>
           <div class="dom_inner filter">
             <div class="dom_filter">

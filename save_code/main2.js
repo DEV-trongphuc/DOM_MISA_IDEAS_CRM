@@ -1,3 +1,22 @@
+// Disable all console logging for cleaner production console
+console.log = () => {};
+console.warn = () => {};
+console.error = () => {};
+
+// =================== DATE PICKER STATE ===================
+let calendarCurrentMonth = new Date().getMonth();
+let calendarCurrentYear = new Date().getFullYear();
+let startDate = null;
+let endDate = null;
+let tempStartDate = null;
+let tempEndDate = null;
+
+// =================== NETWORK CACHE ===================
+const NETWORK_CACHE = new Map();
+const NETWORK_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+
+
 // ===== Perf Utils (drop-in) =====
 const $$ = (sel, root = document) => root.querySelector(sel);
 const $$$ = (sel, root = document) => root.querySelectorAll(sel);
@@ -25,7 +44,42 @@ const qsc = (sel) => {
   if (!DOMCACHE.has(sel)) DOMCACHE.set(sel, $$(sel));
   return DOMCACHE.get(sel);
 };
-
+const logos = [
+  {
+    match: /facebook|fb/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/e/ee/Logo_de_Facebook.png",
+  },
+  {
+    match: /google/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
+  },
+  {
+    match: /tiktok/i,
+    url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
+  },
+  {
+    match: /instagram|insta/i, // 🆕 thêm dòng này
+    url: "https://ideas.edu.vn/wp-content/uploads/2025/10/Instagram_logo_2022.svg-1.webp",
+  },
+  {
+    match: /linkedin/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
+  },
+  {
+    match: /zalo/i,
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
+  },
+  {
+    match: /Other - Web VTCI/i,
+    url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
+  },
+  {
+    match: /Other - Web IDEAS/i,
+    url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
+  },
+];
+const defaultLogo =
+  "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
 // ----------------------------------------
 // ⚙️ Cấu hình Tag ưu tiên
 // ----------------------------------------
@@ -37,6 +91,7 @@ let CRM_DATA = [];
 let VIEW_DATA = [];
 let VIEW_DEGREE = [];
 let ACCOUNT_DATA;
+let ACCOUNT_GROUPED = null;
 const compareState = {
   range1: "last_7days",
   range2: "previous_7days",
@@ -46,9 +101,13 @@ const compareState = {
   data2: null,
 };
 
-let MISA_TOKEN_READY = false; // 🟢 Chỉ login lại lần đầu tiên
+let MISA = false; // 🟢 Chỉ login lại lần đầu tiên
 
-function waitForOTP() {
+// =========================
+// Wait for OTP UI with timeout
+// =========================
+function waitForOTP(timeout = 60000) {
+  // default 60s
   return new Promise((resolve, reject) => {
     const container = document.querySelector(".dom_accounts");
     const overlay = document.querySelector(".dom_accounts_overlay");
@@ -62,167 +121,235 @@ function waitForOTP() {
     container.classList.add("active");
     overlay.classList.add("active");
 
+    const timer = setTimeout(() => {
+      container.classList.remove("active");
+      overlay.classList.remove("active");
+      confirmBtn.removeEventListener("click", handler);
+      otpInput.removeEventListener("input", inputHandler);
+      reject("Timeout OTP");
+    }, timeout);
+
     const handler = () => {
       const otp = otpInput.value.trim();
       if (!otp) {
         alert("Vui lòng nhập OTP!");
         return;
       }
+      clearTimeout(timer);
       container.classList.remove("active");
       overlay.classList.remove("active");
       confirmBtn.removeEventListener("click", handler);
+      otpInput.removeEventListener("input", inputHandler);
       resolve(otp);
     };
 
+    const inputHandler = () => {
+      const otp = otpInput.value.trim();
+      if (otp.length === 6) {
+        handler();
+      }
+    };
+
     confirmBtn.addEventListener("click", handler);
+    otpInput.addEventListener("input", inputHandler);
   });
 }
 
-async function loginFlow(username, password) {
-  // STEP 1: login để lấy temp token
-  const formData1 = new FormData();
-  formData1.append("Username", username);
-  formData1.append("Password", password);
-
-  const res1 = await fetch("https://ideas.edu.vn/login_otp.php?step=login", {
-    method: "POST",
-    body: formData1,
-  });
-  const data1 = await res1.json();
-  console.log("Step 1 response:", data1);
-
-  // Nếu không có temp token mà có EmployeeCode => bỏ qua OTP
-  if (!data1.Data?.AccessToken?.Token) {
-    if (data1.Data?.User?.EmployeeCode) {
-      console.log("Không có temp token, nhưng có EmployeeCode → qua Step 3");
-      return await doStep3();
-    }
-    throw new Error("Không nhận được temp token và không có EmployeeCode!");
-  }
-
-  // STEP 2: nhập OTP
-  const tempToken = data1.Data.AccessToken.Token;
-  const otp = await waitForOTP();
-
-  const formData2 = new FormData();
-  formData2.append("OTP", otp);
-  formData2.append("Token", tempToken);
-
-  const res2 = await fetch("https://ideas.edu.vn/login_otp.php?step=otp", {
-    method: "POST",
-    body: formData2,
-  });
-  const data2 = await res2.json();
-  console.log("Step 2 response:", data2);
-
-  if (!data2.Success) throw new Error(data2.UserMessage || "Login thất bại!");
-
-  // STEP 3: Lấy token CRM chính
-  return await doStep3();
-}
-// 🔹 Hàm Step 3 tách riêng để tái sử dụng
+// =========================
+// Step 3: lấy token CRM
+// =========================
 async function doStep3() {
   const res3 = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
     method: "POST",
   });
   const data3 = await res3.json();
-  console.log("Step 3 response:", data3);
 
   const token = data3.Data?.token;
-  const refresh_token = data3.Data?.refresh_token;
-
+  const expires = data3.Data?.expires; // ISO string
   if (!token) throw new Error("Không lấy được token CRM!");
 
   localStorage.setItem("misa_token", token);
-  localStorage.setItem("misa_refresh_token", refresh_token);
+  localStorage.setItem("misa_expires", expires);
 
-  return { token, refresh_token };
+  return { token, expires };
 }
 
+// =========================
+// Quick login với check expires
+// =========================
 async function quickLogin() {
-  const response = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  const data = await response.json();
-  const token = data?.Data?.token;
+  const storedToken = localStorage.getItem("misa_token");
+  const storedExpires = localStorage.getItem("misa_expires");
 
-  if (token) {
-    localStorage.setItem("misa_token", token);
-    console.log("✅ Token quickLogin đã được lưu");
-    return token;
-  }
-
-  console.warn("⚠️ Không tìm thấy token trong quickLogin:", data);
-  return null;
-}
-
-async function getToken(username, password, forceLogin = false) {
-  if (!forceLogin) {
-    let token = localStorage.getItem("misa_token");
-    if (token) return token;
-
-    const quick = await quickLogin();
-    if (quick) return quick;
-  }
-
-  const fullLogin = await loginFlow(username, password);
-  if (fullLogin?.token) return fullLogin.token;
-
-  const manual = prompt("Nhập token MISA:");
-  if (!manual) throw new Error("Không có token MISA");
-  localStorage.setItem("misa_token", manual);
-  return manual;
-}
-// ========================= FETCH LEAD DATA (no delay) =========================
-async function fetchLeadData(from, to, token) {
-  // const url = `./data.json?from_date=${from}&to_date=${to}&token=${token}`;
-  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-
-      if (res.status === 401 || res.status === 403) {
-        // Token chưa hợp lệ hoặc hết hạn
-        console.warn(`❌ Token bị từ chối (${res.status}) ở lần ${attempt}`);
-        localStorage.removeItem("misa_token");
-        return [];
-      }
-
-      if (!res.ok) {
-        console.warn(`⚠️ Lỗi HTTP ${res.status}, thử lại (${attempt}/3)`);
-        continue; // Thử lại nếu lỗi tạm thời
-      }
-
-      const json = await res.json();
-
-      // Có data thì trả về luôn
-      if (json?.data?.length) {
-        console.log(`📦 Nhận ${json.data.length} leads (attempt ${attempt})`);
-        return json.data;
-      }
-
-      // Không có data nhưng không lỗi → có thể backend chưa sync kịp
-      console.log(`ℹ️ Attempt ${attempt}: data rỗng, thử lại ngay...`);
-      continue;
-    } catch (err) {
-      console.error(`⚠️ Lỗi network attempt ${attempt}:`, err);
-      continue;
+  if (storedToken && storedExpires) {
+    if (new Date(storedExpires).getTime() > Date.now()) {
+      console.log("✅ Dùng token local hợp lệ");
+      return storedToken;
+    } else {
+      localStorage.removeItem("misa_token");
+      localStorage.removeItem("misa_expires");
+      console.log("⚠️ Token expired, remove");
     }
   }
 
-  console.error("❌ Hết 3 lượt gọi mà không có dữ liệu hợp lệ");
-  return [];
+  // Fetch new token
+  const res = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
+    method: "POST",
+  });
+
+  let data = null;
+
+  // 👇 Chống lỗi JSON parse
+  try {
+    data = await res.json();
+  } catch (e) {
+    console.warn("⚠️ API trả về không phải JSON:", e);
+    return null;
+  }
+
+  console.log("API QuickLogin:", data);
+
+  // 👇 Hỗ trợ cả 2 dạng response
+  const token = data?.Data?.token ?? data?.token;
+  const expires = data?.Data?.expires ?? data?.expires;
+
+  if (token && expires) {
+    localStorage.setItem("misa_token", token);
+    localStorage.setItem("misa_expires", expires);
+    console.log("✅ QuickLogin token mới lưu");
+    return token;
+  }
+
+  console.warn("⚠️ QuickLogin không lấy được token:", data);
+  return null;
+}
+
+// =========================
+// Login Flow full với OTP
+// =========================
+async function loginFlow(username, password) {
+  // STEP 1: login -> temp token
+  const form1 = new FormData();
+  form1.append("Username", username);
+  form1.append("Password", password);
+
+  const res1 = await fetch("https://ideas.edu.vn/login_otp.php?step=login", {
+    method: "POST",
+    body: form1,
+  });
+  const data1 = await res1.json();
+
+  if (!data1.Data?.AccessToken?.Token) {
+    if (data1.Data?.User?.EmployeeCode) {
+      console.log("Không có temp token, có EmployeeCode → Step3");
+      return await doStep3();
+    }
+    throw new Error("Không nhận được temp token và không có EmployeeCode!");
+  }
+
+  // STEP 2: OTP
+  const temp = data1.Data.AccessToken.Token;
+  const otp = await waitForOTP();
+  const form2 = new FormData();
+  form2.append("OTP", otp);
+  form2.append("Token", temp);
+
+  const res2 = await fetch("https://ideas.edu.vn/login_otp.php?step=otp", {
+    method: "POST",
+    body: form2,
+  });
+  const data2 = await res2.json();
+  if (!data2.Success) throw new Error(data2.UserMessage || "Login thất bại!");
+
+  // STEP 3: CRM token
+  return await doStep3();
+}
+
+// =========================
+// Lấy token với logic fallback (đảm bảo không bị song song)
+// =========================
+let activeTokenPromise = null;
+
+async function getToken(username, password, forceLogin = false) {
+  if (activeTokenPromise) {
+    console.log("⏳ Đang có tiến trình lấy token hoạt động, đợi...");
+    return activeTokenPromise;
+  }
+
+  activeTokenPromise = (async () => {
+    try {
+      if (!forceLogin) {
+        const quick = await quickLogin();
+        if (quick) return quick;
+      }
+      try {
+        const login = await loginFlow(username, password);
+        if (login?.token) return login.token;
+      } catch (err) {
+        console.warn("⚠️ loginFlow lỗi:", err);
+      }
+
+      const manual = prompt("Nhập token MISA:");
+      if (!manual) throw new Error("Không có token MISA");
+      localStorage.setItem("misa_token", manual);
+      return manual;
+    } finally {
+      activeTokenPromise = null; // reset
+    }
+  })();
+
+  return activeTokenPromise;
+}
+
+async function fetchLeadData(from, to, token) {
+  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+
+    if (res.status === 401 || res.status === 403) {
+      console.warn(`❌ Token bị từ chối (${res.status})`);
+      localStorage.removeItem("misa_token");
+      return [];
+    }
+
+    if (!res.ok) {
+      console.warn(`⚠️ Lỗi HTTP ${res.status}`);
+      return [];
+    }
+
+    const json = await res.json();
+
+    if (json?.data?.length) {
+      console.log(`📦 Nhận ${json.data.length} leads`);
+      return json.data;
+    }
+
+    console.log("ℹ️ Không có dữ liệu trong phản hồi hợp lệ");
+    return [];
+  } catch (err) {
+    console.error("⚠️ Lỗi network:", err);
+    return [];
+  }
 }
 
 async function fetchLeads(from, to) {
+  const cacheKey = `${from}_${to}`;
+  const now = Date.now();
+  if (NETWORK_CACHE.has(cacheKey)) {
+    const cached = NETWORK_CACHE.get(cacheKey);
+    if (now - cached.timestamp < NETWORK_CACHE_TTL_MS) {
+      console.log(`🚀 Serving from NETWORK_CACHE for ${cacheKey}`);
+      CRM_DATA = cached.data;
+      return cached.data;
+    }
+  }
+
   let data = null;
   let token = null;
-  document.querySelector(".loading")?.classList.add("active");
   try {
     // 🔹 1️⃣ Nếu đã login 1 lần rồi, chỉ dùng lại token cũ
-    if (MISA_TOKEN_READY) {
+    if (MISA) {
       token = localStorage.getItem("misa_token");
       data = await fetchLeadData(from, to, token);
 
@@ -233,7 +360,6 @@ async function fetchLeads(from, to) {
       );
 
       // 🟢 Tắt loading
-      document.querySelector(".loading")?.classList.remove("active");
 
       // 🔹 Lưu lại data mới nhất
       if (Array.isArray(data)) {
@@ -253,13 +379,19 @@ async function fetchLeads(from, to) {
       // 🔸 Nếu không có dữ liệu → báo nhẹ
       if (!data?.length) {
         alert("Không có dữ liệu trong khoảng thời gian này!");
+        document.querySelector(".loading")?.classList.remove("active");
       }
 
+      if (Array.isArray(data)) {
+        NETWORK_CACHE.set(cacheKey, { data, timestamp: now });
+      }
       return data || [];
     }
 
     // 🔹 2️⃣ Còn nếu lần đầu (chưa xác thực)
-    token = await getToken("numt@ideas.edu.vn", "Ideas123456");
+    console.log("token");
+    token = await getToken("numt@ideas.edu.vn", "Ideas@812");
+    console.log(token);
     console.log("🔑 Token hiện tại:", token.slice(0, 20) + "...");
 
     data = await fetchLeadData(from, to, token);
@@ -270,6 +402,7 @@ async function fetchLeads(from, to) {
       localStorage.removeItem("misa_token");
 
       const quick = await quickLogin();
+
       if (quick) {
         token = quick;
         data = await fetchLeadData(from, to, token);
@@ -281,28 +414,33 @@ async function fetchLeads(from, to) {
       console.warn("⚠️ quickLogin thất bại → loginFlow OTP...");
       localStorage.removeItem("misa_token");
 
-      token = await getToken("numt@ideas.edu.vn", "Ideas123456", true);
+      token = await getToken("numt@ideas.edu.vn", "Ideas@812", true);
       data = await fetchLeadData(from, to, token);
     }
 
     // ✅ Nếu đã fetch được hợp lệ 1 lần → khóa retry logic
     if (Array.isArray(data)) {
-      MISA_TOKEN_READY = true;
-      console.log(`✅ Token OK, đã bật MISA_TOKEN_READY`);
+      MISA = true;
+      console.log(`✅ Token OK, đã bật MISA`);
     }
 
     if (!data?.length) {
       console.log("ℹ️ Không có dữ liệu (nhưng token hợp lệ).");
+      if (Array.isArray(data)) {
+        NETWORK_CACHE.set(cacheKey, { data, timestamp: now });
+      }
       return [];
     }
 
     console.log(`✅ Đã tải ${data.length} leads`);
     CRM_DATA = data;
+    if (Array.isArray(data)) {
+      NETWORK_CACHE.set(cacheKey, { data, timestamp: now });
+    }
   } catch (err) {
     console.error("🚨 Lỗi fetchLeads:", err);
     alert("Không thể kết nối đến IDEAS CRM!");
   }
-  document.querySelector(".loading")?.classList.remove("active");
   return data || [];
 }
 
@@ -392,15 +530,17 @@ const currentFilter = { campaign: null, source: null, medium: null };
 // ----------------------------------------
 
 async function main() {
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
   performance.mark("start_main");
   const items = document.querySelectorAll(".dom_dashboard .dom_fade_item");
-
   const initRange = getDateRange("last_7days");
+  startDate = initRange.from;
+  endDate = initRange.to;
+  tempStartDate = startDate;
+  tempEndDate = endDate;
   const dateText = document.querySelector(".dom_date");
-  dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
-
-  document.querySelector(".loading")?.classList.add("active");
-
+  dateText.textContent = formatDisplayDate(startDate, endDate);
   const t0 = performance.now();
   RAW_DATA = await fetchLeads(initRange.from, initRange.to);
   console.log(`✅ FetchLeads done in ${(performance.now() - t0).toFixed(1)}ms`);
@@ -421,7 +561,7 @@ async function main() {
     "⏱ Total main():",
     performance.measure("main_total", "start_main", "end_main")
   );
-  document.querySelector(".loading")?.classList.remove("active");
+  loading.classList.remove("active");
   items.forEach((el, i) => {
     setTimeout(() => {
       el.classList.add("show");
@@ -436,22 +576,23 @@ async function main() {
   console.timeEnd("⏱ DOM Dashboard Loaded");
 })();
 
-function generateAdvancedReport(RAW_DATA) {
+async function generateAdvancedReport(RAW_DATA) {
   if (!GROUPED || !Array.isArray(RAW_DATA)) {
     console.warn("generateAdvancedReport: Dữ liệu đầu vào không hợp lệ.");
     return;
   }
 
   // 🧩 Gom grouped theo chi nhánh
-  const buildGroupedForOrg = (orgKeyword) => {
+  const buildGroupedForOrg = async (orgKeyword) => {
     const orgData = RAW_DATA.filter(
       (l) => (l.CustomField16Text || "").trim().toUpperCase() === orgKeyword
     );
-    return { data: orgData, grouped: processCRMData(orgData) };
+    const grouped = await processCRMData(orgData);
+    return { data: orgData, grouped };
   };
 
-  const ideas = buildGroupedForOrg("IDEAS");
-  const vtci = buildGroupedForOrg("VTCI");
+  const ideas = await buildGroupedForOrg("IDEAS");
+  const vtci = await buildGroupedForOrg("VTCI");
 
   // 🧠 Tạo báo cáo riêng từng bên
   const ideasReport = makeDeepReport(ideas.grouped, ideas.data, "IDEAS");
@@ -498,7 +639,7 @@ async function generateSaleReportAI(SALE_DATA, saleName = "SALE") {
     return;
   }
 
-  const GROUPED = processCRMData(SALE_DATA);
+  const GROUPED = await processCRMData(SALE_DATA);
   const reportHTML = makeSaleAIReport(GROUPED, SALE_DATA, saleName);
 
   // 🗓️ Lấy thời gian hiển thị từ DOM
@@ -546,39 +687,6 @@ function makeSaleAIReport(GROUPED, DATA, saleName = "SALE") {
   const totalQuality = DATA.filter((l) => goodTagRe.test(l.TagMain)).length;
   const qualityRateTotal = ((totalQuality / totalLeads) * 100).toFixed(1);
 
-  // === Logo chiến dịch ===
-  const logos = [
-    {
-      match: /facebook|fb/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-    },
-    {
-      match: /google/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-    },
-    {
-      match: /tiktok/i,
-      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-    },
-    {
-      match: /linkedin/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-    },
-    {
-      match: /zalo/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
-    },
-    {
-      match: /ideas/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-    },
-    {
-      match: /vtci/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-    },
-  ];
-  const defaultLogo =
-    "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
   const getLogo = (text = "") => {
     const t = text.toLowerCase();
     for (const l of logos) if (l.match.test(t)) return l.url;
@@ -828,40 +936,6 @@ function makeDeepReport(GROUPED, DATA, orgName = "ORG") {
         ? "Lead đang tăng so với hôm qua."
         : "Lead giảm so với hôm qua."
       : "";
-
-  // === Logo chiến dịch ===
-  const logos = [
-    {
-      match: /facebook|fb/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-    },
-    {
-      match: /google/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-    },
-    {
-      match: /tiktok/i,
-      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-    },
-    {
-      match: /linkedin/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-    },
-    {
-      match: /zalo/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
-    },
-    {
-      match: /Other - Web VTCI/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-    },
-    {
-      match: /Other - Web IDEAS/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-    },
-  ];
-  const defaultLogo =
-    "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
   const getLogo = (text = "") => {
     const t = text.toLowerCase();
     for (const l of logos) if (l.match.test(t)) return l.url;
@@ -1107,7 +1181,10 @@ async function processAndRenderAll(data, isLoad) {
   if (!data?.length) return;
 
   GROUPED = await processCRMData(data);
-  if (isLoad) ACCOUNT_DATA = GROUPED;
+  if (isLoad) {
+    ACCOUNT_DATA = data;
+    ACCOUNT_GROUPED = GROUPED;
+  }
 
   scheduleIdle(() => renderChartsSmoothly(GROUPED), 80);
   scheduleRAF(() => {
@@ -1115,7 +1192,6 @@ async function processAndRenderAll(data, isLoad) {
     renderFilterOptions(GROUPED);
     renderSaleFilter(GROUPED);
   });
-  qsc(".loading")?.classList.remove("active");
 }
 
 // 🧠 Hàm render chart chia nhỏ batch – không chặn main thread
@@ -1148,8 +1224,21 @@ function renderChartsSmoothly(GROUPED) {
 }
 
 function processCRMData(data) {
-  if (!data?.length) {
-    return {
+  return new Promise((resolve) => {
+    if (!data?.length) {
+      resolve({
+        byDate: Object.create(null),
+        byCampaign: Object.create(null),
+        byOwner: Object.create(null),
+        byTag: Object.create(null),
+        byTagAndDate: Object.create(null),
+        byOrg: Object.create(null),
+        tagFrequency: Object.create(null),
+      });
+      return;
+    }
+
+    const r = {
       byDate: Object.create(null),
       byCampaign: Object.create(null),
       byOwner: Object.create(null),
@@ -1158,93 +1247,93 @@ function processCRMData(data) {
       byOrg: Object.create(null),
       tagFrequency: Object.create(null),
     };
-  }
 
-  const r = {
-    byDate: Object.create(null),
-    byCampaign: Object.create(null),
-    byOwner: Object.create(null),
-    byTag: Object.create(null),
-    byTagAndDate: Object.create(null),
-    byOrg: Object.create(null),
-    tagFrequency: Object.create(null),
-  };
+    const len = data.length;
+    const tagPriorityLocal = tagPriority || [];
+    const getTagsArrayLocal = getTagsArray;
+    const getPrimaryTagLocal = getPrimaryTag;
 
-  const len = data.length;
-  const tagPriorityLocal = tagPriority || [];
-  const getTagsArrayLocal = getTagsArray;
-  const getPrimaryTagLocal = getPrimaryTag;
+    const BATCH = 4000;
+    let i = 0;
 
-  const BATCH = 4000;
-  let i = 0;
+    const work = () => {
+      const end = Math.min(i + BATCH, len);
+      for (; i < end; i++) {
+        const lead = data[i];
 
-  const work = () => {
-    const end = Math.min(i + BATCH, len);
-    for (; i < end; i++) {
-      const lead = data[i];
+        const date = lead.CreatedDate ? lead.CreatedDate.slice(0, 10) : "Unknown";
+        const tags = getTagsArrayLocal(lead.TagIDText);
+        let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
+        if (mainTag === "Qualified") mainTag = "Needed";
+        if (tags.length === 0) tags.push("Untag");
+        lead.TagMain = mainTag;
 
-      const date = lead.CreatedDate ? lead.CreatedDate.slice(0, 10) : "Unknown";
-      const tags = getTagsArrayLocal(lead.TagIDText);
-      let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
-      if (mainTag === "Qualified") mainTag = "Needed";
-      if (tags.length === 0) tags.push("Untag");
-      lead.TagMain = mainTag;
+        const org = lead.CustomField16Text || "Org";
+        const campaign = lead.CustomField13Text || "Campaign";
+        const source = lead.CustomField14Text || "Source";
+        const medium = lead.CustomField15Text || "Medium";
+        const ownerKey = (lead.OwnerIDText || "No Owner")
+          .replace(/\s*\(NV.*?\)\s*/gi, "")
+          .trim();
 
-      const org = lead.CustomField16Text || "Org";
-      const campaign = lead.CustomField13Text || "Campaign";
-      const source = lead.CustomField14Text || "Source";
-      const medium = lead.CustomField15Text || "Medium";
-      const ownerKey = (lead.OwnerIDText || "No Owner")
-        .replace(/\s*\(NV.*?\)\s*/gi, "")
-        .trim();
+        for (let j = 0; j < tags.length; j++)
+          r.tagFrequency[tags[j]] = (r.tagFrequency[tags[j]] || 0) + 1;
 
-      for (let j = 0; j < tags.length; j++)
-        r.tagFrequency[tags[j]] = (r.tagFrequency[tags[j]] || 0) + 1;
+        const d = (r.byDate[date] ||= { total: 0 });
+        d.total++;
+        d[mainTag] = (d[mainTag] || 0) + 1;
 
-      const d = (r.byDate[date] ||= { total: 0 });
-      d.total++;
-      d[mainTag] = (d[mainTag] || 0) + 1;
+        (r.byTag[mainTag] ||= []).push(lead);
+        ((r.byTagAndDate[mainTag] ||= Object.create(null))[date] ||= []).push(
+          lead
+        );
+        (((r.byCampaign[campaign] ||= Object.create(null))[source] ||=
+          Object.create(null))[medium] ||= []).push(lead);
 
-      (r.byTag[mainTag] ||= []).push(lead);
-      ((r.byTagAndDate[mainTag] ||= Object.create(null))[date] ||= []).push(
-        lead
-      );
-      (((r.byCampaign[campaign] ||= Object.create(null))[source] ||=
-        Object.create(null))[medium] ||= []).push(lead);
+        const ownerObj = (r.byOwner[ownerKey] ||= {
+          total: 0,
+          tags: Object.create(null),
+          leads: [],
+        });
+        ownerObj.total++;
+        ownerObj.leads.push(lead);
+        const ot = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
+        ot.count++;
+        ot.leads.push(lead);
 
-      const ownerObj = (r.byOwner[ownerKey] ||= {
-        total: 0,
-        tags: Object.create(null),
-        leads: [],
-      });
-      ownerObj.total++;
-      ownerObj.leads.push(lead);
-      const ot = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
-      ot.count++;
-      ot.leads.push(lead);
+        const orgObj = (r.byOrg[org] ||= {
+          total: 0,
+          tags: Object.create(null),
+          owners: Object.create(null),
+          byDate: Object.create(null),
+        });
+        orgObj.total++;
+        (orgObj.tags[mainTag] ||= []).push(lead);
+        (orgObj.owners[ownerKey] ||= []).push(lead);
+        (orgObj.byDate[date] ||= []).push(lead);
+      }
+      if (i < len) {
+        scheduleIdle(work, 60);
+      } else {
+        resolve(r);
+      }
+    };
 
-      const orgObj = (r.byOrg[org] ||= {
-        total: 0,
-        tags: Object.create(null),
-        owners: Object.create(null),
-        byDate: Object.create(null),
-      });
-      orgObj.total++;
-      (orgObj.tags[mainTag] ||= []).push(lead);
-      (orgObj.owners[ownerKey] ||= []).push(lead);
-      (orgObj.byDate[date] ||= []).push(lead);
-    }
-    if (i < len) scheduleIdle(work, 60);
-  };
-
-  work();
-  return r;
+    work();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("export_table")?.addEventListener("click", () => {
+    exportLeadsToCSV(CRM_DATA);
+  });
   const menuItems = document.querySelectorAll(".dom_menu li");
   const container = document.querySelector(".dom_container");
-
+  const mobile_menu = document.querySelector("#mobile_menu");
+  const dom_sidebar = document.querySelector(".dom_sidebar");
+  mobile_menu.addEventListener("click", () => {
+    dom_sidebar.classList.toggle("active");
+  });
   menuItems.forEach((li) => {
     li.addEventListener("click", () => {
       // 🟡 Bỏ active cũ
@@ -1260,7 +1349,7 @@ document.addEventListener("DOMContentLoaded", () => {
           container.classList.remove(cls);
         }
       });
-
+      dom_sidebar.classList.remove("active");
       // 🚀 Thêm class mới tương ứng (theo data-view)
       const view = li.getAttribute("data-view");
       container.classList.add(view);
@@ -1291,36 +1380,46 @@ function renderSaleFilter(grouped) {
 // ============================
 // RENDER FILTERS
 // ============================
+// 🔹 Hàm đếm leads recursive
+function countLeads(obj) {
+  if (!obj) return 0;
+  if (Array.isArray(obj)) return obj.length;
+  if (typeof obj === "object") {
+    return Object.values(obj).reduce((sum, v) => sum + countLeads(v), 0);
+  }
+  return 0;
+}
+
+// 🔹 Render filter options
 function renderFilterOptions(grouped) {
-  const campaignSelect = qsc(".dom_select.campaign ul.dom_select_show");
+  const campaignSelect = qsc(".dom_select.campaign ul");
   const sourceSelect = qsc(".dom_select.source ul.dom_select_show");
   const mediumSelect = qsc(".dom_select.medium ul.dom_select_show");
   if (!campaignSelect || !sourceSelect || !mediumSelect) return;
+
   campaignSelect.innerHTML = "";
   sourceSelect.innerHTML = "";
   mediumSelect.innerHTML = "";
 
-  // Campaign: luôn từ ACCOUNT_DATA (không đổi logic)
+  const group = ACCOUNT_GROUPED || grouped;
+  // 🔹 Campaign
   const fragCamp = document.createDocumentFragment();
-  for (const [campaign, sources] of Object.entries(
-    ACCOUNT_DATA.byCampaign || {}
-  )) {
-    const total = Object.values(sources)
-      .flatMap((s) => Object.values(s))
-      .flat().length;
+  for (const [campaign, sources] of Object.entries(group.byCampaign || {})) {
+    const total = countLeads(sources);
     const li = document.createElement("li");
+    console.log(total);
+
     li.innerHTML = `<span class="radio_box"></span><span><span>${campaign}</span><span class="count">${total}</span></span>`;
     li.onclick = () => applyFilter("campaign", campaign);
     fragCamp.appendChild(li);
   }
   campaignSelect.appendChild(fragCamp);
 
-  // Source: từ grouped hiện tại
+  // 🔹 Source
   const sourcesMap = Object.create(null);
   for (const sources of Object.values(grouped.byCampaign || {})) {
-    for (const [src, mediums] of Object.entries(sources)) {
-      sourcesMap[src] =
-        (sourcesMap[src] || 0) + Object.values(mediums).flat().length;
+    for (const [src, mediums] of Object.entries(sources || {})) {
+      sourcesMap[src] = (sourcesMap[src] || 0) + countLeads(mediums);
     }
   }
   const fragSrc = document.createDocumentFragment();
@@ -1332,12 +1431,12 @@ function renderFilterOptions(grouped) {
   }
   sourceSelect.appendChild(fragSrc);
 
-  // Medium
+  // 🔹 Medium
   const mediumMap = Object.create(null);
   for (const sources of Object.values(grouped.byCampaign || {})) {
-    for (const mediums of Object.values(sources)) {
-      for (const [m, leads] of Object.entries(mediums)) {
-        mediumMap[m] = (mediumMap[m] || 0) + leads.length;
+    for (const mediums of Object.values(sources || {})) {
+      for (const [m, leads] of Object.entries(mediums || {})) {
+        mediumMap[m] = (mediumMap[m] || 0) + countLeads(leads);
       }
     }
   }
@@ -1558,6 +1657,8 @@ function applyFilter(type, value) {
 // FILTER DATA LOGIC
 // ============================
 function setupLeadSearch() {
+  const currentAccount =
+    localStorage.getItem("selectedAccount") || "Total Data";
   const input = qsc(".dom_search");
   const btn = qsc("#find_data");
   if (!input || !btn) return;
@@ -1568,11 +1669,20 @@ function setupLeadSearch() {
       renderLeadTable(RAW_DATA);
       return;
     }
-    const filtered = RAW_DATA.filter((l) => {
-      const phone = (l.Mobile || "").toLowerCase();
-      const owner = (l.OwnerIDText || "").toLowerCase();
-      return phone.includes(keyword) || owner.includes(keyword);
-    });
+    let filtered;
+    if (currentAccount !== "Total Data") {
+      filtered = RAW_DATA.filter((l) => {
+        const phone = (l.Mobile || "").toLowerCase();
+        const owner = (l.OwnerIDText || "").toLowerCase();
+        return phone.includes(keyword) || owner.includes(keyword);
+      });
+    } else {
+      filtered = ACCOUNT_DATA.filter((l) => {
+        const phone = (l.Mobile || "").toLowerCase();
+        const owner = (l.OwnerIDText || "").toLowerCase();
+        return phone.includes(keyword) || owner.includes(keyword);
+      });
+    }
     renderLeadTable(filtered);
     if (!filtered.length) {
       const c = qsc(".dom_table_box");
@@ -2117,97 +2227,275 @@ function setupAccountFilter() {
   });
 }
 
+// Helper to format date in Local Time (YYYY-MM-DD)
+function formatDateLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function renderCalendar() {
+  const container = document.getElementById("calendar_left");
+  if (!container) return;
+
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  const firstDayOfMonth = new Date(calendarCurrentYear, calendarCurrentMonth, 1).getDay();
+  const daysInMonth = new Date(calendarCurrentYear, calendarCurrentMonth + 1, 0).getDate();
+
+  let html = `
+    <div class="calendar_nav">
+      <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+      <span>${monthNames[calendarCurrentMonth]} ${calendarCurrentYear}</span>
+      <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+    <div class="calendar_grid">
+      <div class="calendar_day_name">Su</div>
+      <div class="calendar_day_name">Mo</div>
+      <div class="calendar_day_name">Tu</div>
+      <div class="calendar_day_name">We</div>
+      <div class="calendar_day_name">Th</div>
+      <div class="calendar_day_name">Fr</div>
+      <div class="calendar_day_name">Sa</div>
+  `;
+
+  // Empty slots for previous month
+  for (let i = 0; i < firstDayOfMonth; i++) {
+    html += `<div class="calendar_day empty"></div>`;
+  }
+
+  const todayStr = formatDateLocal(new Date());
+  const start = tempStartDate ? new Date(tempStartDate) : null;
+  const end = tempEndDate ? new Date(tempEndDate) : null;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const curDate = new Date(calendarCurrentYear, calendarCurrentMonth, day);
+    const curDateStr = formatDateLocal(curDate);
+
+    let classes = ["calendar_day"];
+    if (curDateStr === todayStr) classes.push("today");
+
+    if (start && curDateStr === tempStartDate) classes.push("selected");
+    if (end && curDateStr === tempEndDate) classes.push("selected");
+
+    if (start && end && curDate > start && curDate < end) {
+      classes.push("in_range");
+    }
+
+    html += `<div class="${classes.join(' ')}" onclick="selectCalendarDay('${curDateStr}')">${day}</div>`;
+  }
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+window.changeMonth = (dir) => {
+  calendarCurrentMonth += dir;
+  if (calendarCurrentMonth < 0) {
+    calendarCurrentMonth = 11;
+    calendarCurrentYear--;
+  } else if (calendarCurrentMonth > 11) {
+    calendarCurrentMonth = 0;
+    calendarCurrentYear++;
+  }
+  renderCalendar();
+};
+
+window.selectCalendarDay = (dateStr) => {
+  const startInput = document.getElementById("start_date_val");
+  const endInput = document.getElementById("end_date_val");
+
+  if (!tempStartDate || (tempStartDate && tempEndDate)) {
+    // Start fresh selection
+    tempStartDate = dateStr;
+    tempEndDate = null;
+    startInput.value = dateStr;
+    endInput.value = "";
+  } else {
+    // Selecting the end date
+    if (dateStr === tempStartDate) {
+      // Deselect if clicking the same day twice when no end date set
+      tempStartDate = null;
+      startInput.value = "";
+    } else {
+      const s = new Date(tempStartDate);
+      const e = new Date(dateStr);
+
+      if (e < s) {
+        tempEndDate = tempStartDate;
+        tempStartDate = dateStr;
+      } else {
+        tempEndDate = dateStr;
+      }
+
+      startInput.value = tempStartDate;
+      endInput.value = tempEndDate;
+    }
+  }
+
+  // Highlight "Custom Date" in sidebar
+  const presetItems = document.querySelectorAll(".time_picker_sidebar li[data-date]");
+  presetItems.forEach(i => i.classList.remove("active"));
+  const customLi = document.querySelector('li[data-date="custom_range"]');
+  if (customLi) customLi.classList.add("active");
+
+  renderCalendar();
+};
+
 function setupTimeDropdown() {
   const timeSelect = document.querySelector(".dom_select.time");
   if (!timeSelect) return;
 
   const toggle = timeSelect.querySelector(".flex");
-  const list = timeSelect.querySelector(".dom_select_show");
+  const panel = timeSelect.querySelector(".time_picker_panel");
   const selectedLabel = timeSelect.querySelector(".dom_selected");
   const dateText = document.querySelector(".dom_date");
-  const applyBtn = timeSelect.querySelector(".apply_custom_date");
-  const customBox = timeSelect.querySelector(".custom_date");
-  const allItems = list.querySelectorAll("li");
+  const presetItems = panel.querySelectorAll(".time_picker_sidebar li[data-date]");
+  const updateBtn = panel.querySelector(".btn_update");
+  const cancelBtn = panel.querySelector(".btn_cancel");
+  const startInput = panel.querySelector("#start_date_val");
+  const endInput = panel.querySelector("#end_date_val");
 
-  // 🟡 Toggle dropdown
-  toggle.onclick = (e) => {
+  // Initial display sync
+  if (startDate && endDate) {
+    startInput.value = startDate;
+    endInput.value = endDate;
+    tempStartDate = startDate;
+    tempEndDate = endDate;
+  }
+
+  // Prevent clicks inside the panel from bubbling
+  panel.addEventListener("click", (e) => {
     e.stopPropagation();
-    document
-      .querySelectorAll(".dom_select_show")
-      .forEach((ul) => ul !== list && ul.classList.remove("active"));
-    list.classList.toggle("active");
-  };
+  });
 
-  // 🟢 Chọn preset thời gian
-  allItems.forEach((li) => {
-    li.onclick = async (e) => {
+  // Toggle dropdown
+  toggle.addEventListener("click", (e) => {
+    if (e.target.closest(".time_picker_panel")) return;
+    e.stopPropagation();
+
+    const isActive = panel.classList.contains("active");
+    // Close all other dropdowns
+    document.querySelectorAll(".dom_select_show").forEach(p => p.classList.remove("active"));
+
+    if (!isActive) {
+      panel.classList.add("active");
+      renderCalendar();
+    }
+  });
+
+  // Handle sidebar presets
+  presetItems.forEach((item) => {
+    item.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const type = li.dataset.date;
+      const type = item.dataset.date;
+
+      // Reset active state
+      presetItems.forEach((i) => i.classList.remove("active"));
+      item.classList.add("active");
 
       if (type === "custom_range") {
-        allItems.forEach((i) => i.classList.remove("active"));
-        li.classList.add("active");
-        customBox.classList.add("show");
         return;
       }
 
-      // reset active
-      allItems.forEach((i) => i.classList.remove("active"));
-      li.classList.add("active");
-      customBox.classList.remove("show");
-
-      const label = li.querySelector("span:last-child").textContent.trim();
-      selectedLabel.textContent = label;
-
       const range = getDateRange(type);
-      dateText.textContent = formatDisplayDate(range.from, range.to);
-      document.querySelector(".loading")?.classList.add("active");
-      // ✅ Fetch lại theo ngày
-      RAW_DATA = await fetchLeads(range.from, range.to);
-      // ✅ Reset account về “Total Data”
+      startDate = range.from;
+      endDate = range.to;
+      tempStartDate = startDate;
+      tempEndDate = endDate;
+
+      startInput.value = startDate;
+      endInput.value = endDate;
+
+      const label = item.querySelector('span:last-child').textContent.trim();
+      selectedLabel.textContent = label;
+      
+      dateText.textContent = formatDisplayDate(startDate, endDate);
+
+      // Refresh dashboard with data fetch
+      const loading = document.querySelector(".loading");
+      loading.classList.add("active");
+      RAW_DATA = await fetchLeads(startDate, endDate);
       localStorage.setItem("selectedAccount", "Total Data");
       setActiveAccountUI("Total Data");
       processAndRenderAll(RAW_DATA, true);
-      list.classList.remove("active");
-    };
+      
+      panel.classList.remove("active");
+      loading.classList.remove("active");
+    });
   });
 
-  // 🟠 Custom date apply
-  applyBtn.onclick = async (e) => {
-    e.stopPropagation();
-    const start = document.getElementById("start").value;
-    const end = document.getElementById("end").value;
+  // Cancel button
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      panel.classList.remove("active");
+      tempStartDate = startDate;
+      tempEndDate = endDate;
+    });
+  }
 
-    if (!start || !end)
-      return alert("⚠️ Vui lòng chọn đủ ngày bắt đầu và kết thúc!");
+  // Update button
+  if (updateBtn) {
+    updateBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const start = startInput.value;
+      const end = endInput.value;
 
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const minDate = new Date("2025-10-01");
+      if (!start || !end) {
+        alert("⛔ Vui lòng chọn đầy đủ ngày!");
+        return;
+      }
 
-    if (startDate < minDate)
-      return alert("⚠️ Ngày bắt đầu không được trước 01/10/2025!");
-    if (endDate <= startDate)
-      return alert("⚠️ Ngày kết thúc phải sau ngày bắt đầu!");
+      const s = new Date(start);
+      const eD = new Date(end);
+      if (eD < s) {
+        alert("⚠️ Ngày kết thúc phải sau ngày bắt đầu!");
+        return;
+      }
+      
+      const minDate = new Date("2025-08-01");
+      if (s < minDate) {
+        alert("⚠️ Ngày bắt đầu không được trước 01/08/2025!");
+        return;
+      }
 
-    selectedLabel.textContent = "Custom Date";
-    dateText.textContent = formatDisplayDate(start, end);
-    document.querySelector(".loading")?.classList.add("active");
-    // ✅ Fetch lại
-    RAW_DATA = await fetchLeads(start, end);
-    processAndRenderAll(RAW_DATA, true);
-    // ✅ Reset account về “Total Data”
-    localStorage.setItem("selectedAccount", "Total Data");
-    setActiveAccountUI("Total Data");
-    list.classList.remove("active");
-    customBox.classList.remove("show");
-  };
+      startDate = start;
+      endDate = end;
+      selectedLabel.textContent = "Custom Date";
+      dateText.textContent = formatDisplayDate(start, end);
 
-  // 🔹 Đóng khi click ra ngoài
+      const loading = document.querySelector(".loading");
+      loading.classList.add("active");
+      RAW_DATA = await fetchLeads(startDate, endDate);
+      localStorage.setItem("selectedAccount", "Total Data");
+      setActiveAccountUI("Total Data");
+      processAndRenderAll(RAW_DATA, true);
+
+      panel.classList.remove("active");
+      loading.classList.remove("active");
+    });
+  }
+
+  // Handle manual input changes
+  startInput.addEventListener('change', () => {
+    tempStartDate = startInput.value;
+    renderCalendar();
+  });
+  endInput.addEventListener('change', () => {
+    tempEndDate = endInput.value;
+    renderCalendar();
+  });
+
+  // Close dropdown on click outside
   document.addEventListener("click", (e) => {
-    if (!timeSelect.contains(e.target)) list.classList.remove("active");
+    if (!timeSelect.contains(e.target)) {
+      panel.classList.remove("active");
+    }
   });
 }
+
 function setupDropdowns() {
   const showSelectors =
     ".dom_select.saleperson_detail .dom_select_show, .dom_select.campaign .dom_select_show, .dom_select.source .dom_select_show, .dom_select.medium .dom_select_show";
@@ -2444,36 +2732,6 @@ function renderToplist(grouped, mode = "default") {
   wrap.innerHTML = "";
 
   // 🎨 Logo map
-  const logos = [
-    {
-      match: /facebook|fb/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-    },
-    {
-      match: /google/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-    },
-    {
-      match: /tiktok/i,
-      url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-    },
-    {
-      match: /linkedin/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-    },
-    {
-      match: /zalo/i,
-      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Zalo_logo_2021.svg/512px-Zalo_logo_2021.svg.png",
-    },
-    {
-      match: /Other - Web VTCI/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-    },
-    {
-      match: /Other - Web IDEAS/i,
-      url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-    },
-  ];
 
   const defaultLogo =
     "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
@@ -2485,10 +2743,24 @@ function renderToplist(grouped, mode = "default") {
     else if (item.ratio < 40) barColor = "rgb(255, 169, 0)";
 
     let logo = defaultLogo;
-    for (const entry of logos) {
-      if (entry.match.test(item.key)) {
-        logo = entry.url;
-        break;
+
+    // Ưu tiên match theo source trước
+    if (item.source) {
+      for (const entry of logos) {
+        if (entry.match.test(item.source)) {
+          logo = entry.url;
+          break;
+        }
+      }
+    }
+
+    // Nếu source không trúng, thử match theo campaign
+    if (logo === defaultLogo && item.campaign) {
+      for (const entry of logos) {
+        if (entry.match.test(item.campaign)) {
+          logo = entry.url;
+          break;
+        }
       }
     }
 
@@ -2563,7 +2835,7 @@ function renderToplist(grouped, mode = "default") {
 // ======================
 // ⚙️ Nút toggle chế độ lọc
 // ======================
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
   // --- 1️⃣ Đóng sale detail ---
   const backBtn =
     e.target.closest(".sale_report .sale_report_close") ||
@@ -2572,7 +2844,7 @@ document.addEventListener("click", (e) => {
     const dashboard = document.querySelector(".dom_dashboard");
     if (dashboard) {
       dashboard.classList.remove("sale_detail_ads", "sale_detail");
-      processAndRenderAll(RAW_DATA); // 🔁 quay về dataset hiện tại
+      await processAndRenderAll(ACCOUNT_DATA); // 🔁 quay về dataset hiện tại
     }
     setSourceActive();
     return;
@@ -2585,7 +2857,7 @@ document.addEventListener("click", (e) => {
     if (!panel) return;
 
     // Gọi báo cáo
-    generateAdvancedReport(CRM_DATA);
+    await generateAdvancedReport(CRM_DATA);
 
     // Kích hoạt panel
     panel.classList.add("active");
@@ -2612,7 +2884,7 @@ document.addEventListener("click", (e) => {
   if (aiCompareBtn) {
     const panel = document.querySelector(".dom_ai_report");
     if (!panel) return;
-    generateAdvancedCompareReport();
+    await generateAdvancedCompareReport();
     // Kích hoạt panel
     panel.classList.add("active");
     const dom_ai_report_content = document.querySelector(
@@ -2629,7 +2901,7 @@ document.addEventListener("click", (e) => {
     );
     const saleName =
       activeSaleEl?.textContent?.trim() || VIEW_DATA[0]?.OwnerIDText || "Sale";
-    generateSaleReportAI(VIEW_DATA, saleName);
+    await generateSaleReportAI(VIEW_DATA, saleName);
     // Kích hoạt panel
     panel.classList.add("active");
 
@@ -2662,6 +2934,8 @@ document.addEventListener("click", (e) => {
 document.addEventListener("click", async (e) => {});
 
 document.addEventListener("DOMContentLoaded", () => {
+
+
   const btnSource = document.querySelector(".button_group .btn-source");
   const btnCampaign = document.querySelector(".button_group .btn-campaign");
 
@@ -2745,10 +3019,10 @@ function renderCampaignPieChart(grouped) {
   const ctx = document.getElementById("pieCampaign");
   if (!ctx) return;
 
+  // 🧮 Gom label + data
   const labels = [];
   const values = [];
 
-  // 🧮 Tính tổng lead của từng campaign
   for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
     let count = 0;
     for (const src of Object.values(sources)) {
@@ -2757,105 +3031,123 @@ function renderCampaignPieChart(grouped) {
       }
     }
     labels.push(campaign);
-    values.push(count);
+    values.push(Number(count));
   }
 
-  // 🎨 Bảng màu chính + phụ
-  const mainPalette = [
-    "#ffa900", // vàng
-    "#262a53", // xanh than
-    "#cccccc", // xám
-    "#e17055", // cam
+  // Không có data → không vẽ
+  if (!values.length || values.every((v) => v === 0)) return;
+
+  // 🌈 Màu sắc (same vibe như device chart)
+  const highlightColors = [
+    "rgba(255,171,0,0.9)", // vàng
+    "rgba(156,163,175,0.7)", // xám nhạt
+  ];
+  const fallbackColors = [
+    "rgba(38,42,83,0.9)", // xanh đậm
+    "rgba(0, 59, 59, 0.7)",
+    "rgba(0, 71, 26, 0.7)",
+    "rgba(153, 0, 0, 0.7)",
+    "rgba(52, 31, 151, 0.7)",
+    "rgba(0, 94, 124, 0.7)",
   ];
 
-  const extraPalette = [
-    "#74b9ff",
-    "#a29bfe",
-    "#55efc4",
-    "#fab1a0",
-    "#fdcb6e",
-    "#81ecec",
-    "#b2bec3",
-  ];
+  const colors = values.map((_, i) =>
+    i < 2 ? highlightColors[i] : fallbackColors[i - 2] || "#ccc"
+  );
 
-  // ✅ Tạo bảng màu theo số lượng campaign
-  const colors = [...mainPalette, ...extraPalette];
-  const bgColors = labels.map((_, i) => colors[i % colors.length] + "cc"); // 80% opacity
-  const borderColors = labels.map((_, i) => colors[i % colors.length]);
   const total = values.reduce((a, b) => a + b, 0);
 
-  // 🔄 Update nếu chart đã tồn tại
+  // 🎯 Tìm campaign chiếm % cao nhất
+  const maxIndex = values.indexOf(Math.max(...values));
+  const maxLabel = labels[maxIndex];
+  const maxPercent = ((values[maxIndex] / total) * 100).toFixed(1);
+
+  // 🔵 Center plugin (hiện % ngay giữa lỗ)
+  const centerTextPlugin = {
+    id: "centerText",
+    afterDraw(chart) {
+      const { width, height } = chart;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#333";
+
+      const centerY = height / 2 - 18;
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText(`${maxPercent}%`, width / 2, centerY - 4);
+
+      ctx.font = "12px sans-serif";
+      ctx.fillText(maxLabel, width / 2, centerY + 18);
+      ctx.restore();
+    },
+  };
+
+  // 🔄 Chart đã tồn tại → destroy tạo mới
   if (window.campaignPieInstance) {
-    const chart = window.campaignPieInstance;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = bgColors;
-    chart.data.datasets[0].borderColor = borderColors;
-    chart.update("active");
-    return;
+    window.campaignPieInstance.destroy();
+    window.campaignPieInstance = null;
   }
 
-  // 🚀 Vẽ Pie Chart
+  // 🥯 Render Donut Chart
   window.campaignPieInstance = new Chart(ctx, {
-    type: "pie",
+    type: "doughnut",
     data: {
       labels,
       datasets: [
         {
           label: "Campaign Share",
           data: values,
-          backgroundColor: bgColors,
-          borderColor: borderColors,
-          borderWidth: 1.5,
+          backgroundColor: colors,
+          borderColor: "#fff",
+          borderWidth: 2,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: 10 },
-      animation: {
-        duration: 900,
-        easing: "easeOutQuart",
-      },
+      cutout: "70%", // 🥯 Donut hole
       plugins: {
         legend: {
-          position: "bottom", // ✅ canh bên phải
-          align: "center",
+          position: "bottom",
           labels: {
-            boxWidth: 8,
+            boxWidth: 12,
             padding: 10,
             color: "#333",
-            font: { size: 11, weight: "500" },
           },
         },
         tooltip: {
           callbacks: {
             label: (ctx) => {
-              const value = ctx.parsed;
-              const percent =
-                total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-              return `${ctx.label}: ${value} (${percent}%)`;
+              const dataset = ctx.chart.data.datasets[0].data;
+              const total = dataset.reduce((a, b) => a + b, 0);
+              const percent = ((ctx.raw / total) * 100).toFixed(1);
+
+              return `${ctx.label}: ${ctx.raw} (${percent}%)`;
             },
           },
         },
         datalabels: {
           color: "#fff",
           font: { size: 10, weight: "600" },
-          formatter: (value) => {
-            const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-            return percent > 3 ? `${percent}%` : "";
+          formatter: (value, ctx) => {
+            const dataset = ctx.chart.data.datasets[0].data;
+            const total = dataset.reduce((a, b) => a + b, 0);
+            const percent = ((value / total) * 100).toFixed(1);
+            return percent >= 4 ? `${percent}%` : "";
           },
           anchor: "end",
           align: "end",
           offset: 4,
-          clip: false,
         },
       },
+      hoverOffset: 8,
     },
-    plugins: [ChartDataLabels],
+    plugins: [ChartDataLabels, centerTextPlugin],
   });
 }
+
 function renderLeadSaleChart(grouped, tagFilter = "Needed") {
   if (!grouped?.byOwner) return;
   const ctx = document.getElementById("leadSale");
@@ -2869,11 +3161,23 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
   for (let i = 0; i < entries.length; i++) {
     const [owner, data] = entries[i];
     labels[i] = owner.replace(/\s*\(NV.*?\)/gi, "").trim();
-    totalCounts[i] = data.total || 0;
-    tagCounts[i] = data.tags?.[tagFilter]?.count || 0;
+    totalCounts[i] = Number(data.total || 0);
+    tagCounts[i] = Number(data.tags?.[tagFilter]?.count || 0);
   }
 
-  const maxValue = Math.max(...totalCounts, ...tagCounts);
+  // Nếu không có data hữu dụng thì thôi
+  if (
+    !labels.length ||
+    (totalCounts.every((v) => v === 0) && tagCounts.every((v) => v === 0))
+  ) {
+    if (window.leadSaleChartInstance) {
+      window.leadSaleChartInstance.destroy();
+      window.leadSaleChartInstance = null;
+    }
+    return;
+  }
+
+  const maxValue = Math.max(...totalCounts, ...tagCounts, 1);
   const tagColor = "rgba(38,42,83,0.8)",
     totalColor = "rgba(255,171,0,0.8)";
 
@@ -2893,10 +3197,20 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
       inst.data.datasets[1].label = `${tagFilter} Leads`;
       changed = true;
     }
-    if (changed) inst.update("active");
+
+    // Nếu có thay đổi, cập nhật lại chart và return
+    if (changed) {
+      // Cập nhật scale ticks nếu cần (để tick step hợp lý)
+      if (inst.options && inst.options.scales && inst.options.scales.y) {
+        inst.options.scales.y.ticks.stepSize =
+          Math.ceil(Math.max(...totalCounts, ...tagCounts) / 4) || 1;
+      }
+      inst.update("active");
+    }
     return;
   }
 
+  // Tạo mới chart
   window.leadSaleChartInstance = new Chart(ctx.getContext("2d"), {
     type: "bar",
     data: {
@@ -2930,20 +3244,56 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
         tooltip: {
           callbacks: {
             label: (c) => {
-              const total = totalCounts[c.dataIndex] || 0,
-                cnt = c.parsed.y || 0;
-              const pct = total > 0 ? ((cnt / total) * 100).toFixed(1) : 0;
-              return `${
-                c.dataset.label
-              }: ${cnt.toLocaleString()} leads (${pct}%)`;
+              const chart = c.chart;
+
+              const totalDataset = chart.data.datasets[0].data; // total per sale
+              const tagDataset = chart.data.datasets[1].data; // tag per sale
+
+              const totalAllSales = totalDataset.reduce((a, b) => a + b, 0);
+
+              const totalOfSale = Number(totalDataset[c.dataIndex] || 0);
+              const tagOfSale = Number(tagDataset[c.dataIndex] || 0);
+
+              // % theo từng sale (tagFilter)
+              const pctTag =
+                totalOfSale > 0
+                  ? ((tagOfSale / totalOfSale) * 100).toFixed(1)
+                  : "0.0";
+
+              // % tổng toàn bộ sale (total leads)
+              const pctTotalAll =
+                totalAllSales > 0
+                  ? ((totalOfSale / totalAllSales) * 100).toFixed(1)
+                  : "0.0";
+
+              if (c.datasetIndex === 0) {
+                // Total Leads column
+                return `Total Leads: ${totalOfSale.toLocaleString()} (${pctTotalAll}%)`;
+              } else {
+                // Tag Filter column
+                return `${
+                  c.dataset.label
+                }: ${tagOfSale.toLocaleString()} (${pctTag}%)`;
+              }
             },
           },
         },
+
         datalabels: {
           anchor: "end",
           align: "end",
           font: { weight: "bold", size: 12 },
-          formatter: (v) => (v > 0 ? v : ""),
+          formatter: (v, ctx) => {
+            // Nếu muốn hiển thị % trên datalabel, tính theo chart data
+            // Hiện giữ nguyên là số, nhưng có thể đổi sang % bằng cách mở comment dưới
+            return v > 0 ? v : "";
+            /*
+            const chart = ctx.chart;
+            const total = Number((chart.data.datasets[0] && chart.data.datasets[0].data[ctx.dataIndex]) || 0);
+            const pct = total ? ((v / total) * 100).toFixed(1) : "0.0";
+            return v > 0 ? `${v} (${pct}%)` : "";
+            */
+          },
         },
       },
       scales: {
@@ -2954,7 +3304,10 @@ function renderLeadSaleChart(grouped, tagFilter = "Needed") {
         y: {
           beginAtZero: true,
           grid: { color: "rgba(0,0,0,0.05)" },
-          ticks: { color: "#666", stepSize: Math.ceil(maxValue / 4) || 1 },
+          ticks: {
+            color: "#666",
+            stepSize: Math.ceil(maxValue / 4) || 1,
+          },
           afterDataLimits: (s) => (s.max *= 1.1),
         },
       },
@@ -2978,6 +3331,7 @@ function maskMobile(mobile) {
 }
 
 function renderLeadTable(leads) {
+
   const container = document.querySelector(".dom_table_box");
   if (!container) return;
 
@@ -3139,6 +3493,59 @@ function renderLeadTable(leads) {
       });
     }
   });
+}
+function exportLeadsToCSV(leads) {
+  if (!Array.isArray(leads) || leads.length === 0) {
+    alert("No data to export");
+    return;
+  }
+
+  const headers = [
+    "Created Date",
+    "Lead Name",
+    "Mobile",
+    "Email",
+    "Owner",
+    "Tags",
+    "Campaign",
+    "Source",
+    "Medium",
+    "Organization",
+    "Description",
+  ];
+
+  const escapeCSV = (val = "") => `"${String(val).replace(/"/g, '""')}"`;
+
+  const rows = leads.map((l) => [
+    l.CreatedDate ? new Date(l.CreatedDate).toLocaleDateString("vi-VN") : "",
+    l.LeadName || "",
+    l.Mobile || "",
+    l.CustomField18 || "",
+    l.OwnerIDText?.replace(/\s*\(NV.*?\)/gi, "").trim() || "",
+    l.TagIDText || "",
+    l.CustomField13Text || "",
+    l.CustomField14Text || "",
+    l.CustomField15Text || "",
+    l.CustomField16Text || "",
+    l.Description || "",
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((row) => row.map(escapeCSV).join(","))
+    .join("\n");
+
+  const blob = new Blob(["\ufeff" + csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `leads_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function setupTagClick() {
@@ -3794,8 +4201,9 @@ function renderToplistBySale(grouped) {
 }
 
 // 🔹 Filter sale chính xác tên clean
-function filterBySaleExact(saleName) {
-  const group = processCRMData(RAW_DATA);
+function filterBySaleExact(saleName, account) {
+  const group = ACCOUNT_GROUPED || GROUPED;
+
   if (!group?.byOwner) return [];
   const matchedSales = Object.keys(group.byOwner).filter(
     (owner) => owner.replace(/\(NV.*?\)/gi, "").trim() === saleName
@@ -3805,19 +4213,8 @@ function filterBySaleExact(saleName) {
 
 // 🔹 Render dropdown sale từ dữ liệu tổng
 function renderSaleDropdown() {
-  let filteredData = RAW_DATA;
-  const currentAccount =
-    localStorage.getItem("selectedAccount") || "Total Data";
-  if (currentAccount === "VTCI") {
-    filteredData = RAW_DATA.filter(
-      (l) => l.CustomField16Text?.trim().toUpperCase() == "VTCI"
-    );
-  } else if (currentAccount === "IDEAS") {
-    filteredData = RAW_DATA.filter(
-      (l) => l.CustomField16Text?.trim().toUpperCase() == "IDEAS"
-    );
-  }
-  const group = processCRMData(filteredData);
+  const group = ACCOUNT_GROUPED || GROUPED;
+  if (!group?.byOwner) return;
   const saleDetailUI = document.querySelector(".sale_report");
   const dropdown = saleDetailUI.querySelector(
     ".saleperson_detail .dom_select_show"
@@ -3837,7 +4234,7 @@ function renderSaleDropdown() {
 
     // Click chọn sale từ dropdown
     li.addEventListener("click", () => {
-      const leads = filterBySaleExact(name);
+      const leads = filterBySaleExact(name, currentAccount);
       processAndRenderAll(leads);
       const saleDetailUI = dropdown.closest(".sale_report");
       const img = saleDetailUI.querySelector("img");
@@ -3965,25 +4362,23 @@ function setupCompareDropdowns() {
 async function loadCompareData(range1, range2) {
   const compareWrap = document.querySelector(".dom_compare");
   if (!compareWrap) return alert("⚠️ Không tìm thấy vùng compare!");
-
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
   const currentAccount =
     localStorage.getItem("selectedAccount") || "Total Data";
-  console.log("📊 Loading compare data for:", currentAccount);
 
   try {
-    // 🧩 Fetch song song
-    const [data1Raw, data2Raw] = await Promise.all([
-      fetchLeads(range1.from, range1.to),
-      fetchLeads(range2.from, range2.to),
-    ]);
+    // 🧩 Fetch tuần tự để tránh lỗi tranh chấp token / OTP khi hết hạn
+    const data1Raw = await fetchLeads(range1.from, range1.to);
+    const data2Raw = await fetchLeads(range2.from, range2.to);
 
     // ✅ Lọc đúng theo account hiện tại
     const data1 = filterByAccount(data1Raw, currentAccount);
     const data2 = filterByAccount(data2Raw, currentAccount);
 
     // 🧠 Process + Summary
-    const g1 = processCRMData(data1);
-    const g2 = processCRMData(data2);
+    const g1 = await processCRMData(data1);
+    const g2 = await processCRMData(data2);
     const summary1 = summarizeCompareData(data1, g1);
     const summary2 = summarizeCompareData(data2, g2);
 
@@ -4003,12 +4398,12 @@ async function loadCompareData(range1, range2) {
     window.CRM_DATA_2 = data2;
     window.GROUPED_COMPARE_1 = g1;
     window.GROUPED_COMPARE_2 = g2;
-
     console.log("✅ Compare data loaded & cached for:", currentAccount);
   } catch (err) {
     console.error("❌ Lỗi khi tải Compare:", err);
     alert("Lỗi khi tải dữ liệu so sánh!");
   } finally {
+    loading.classList.remove("active");
   }
 }
 
@@ -4072,12 +4467,11 @@ document.addEventListener("click", async (e) => {
 
   const range1 = getDateRange("last_7days");
   const range2 = getDateRange("previous_7days");
-  const loading = document.querySelector(".loading");
 
-  loading.classList.add("active"); // 🌀 Hiện overlay loading
   updateCompareDateUI(range1, range2);
+  const loading = document.querySelector(".loading");
+  loading.classList.add("active");
   await loadCompareData(range1, range2);
-  loading.classList.remove("active"); // 🌀 Hiện overlay loading
   compareLoaded = true;
 });
 
@@ -4109,53 +4503,6 @@ document.addEventListener("click", async (e) => {
   await loadCompareData(range1, range2);
 });
 
-// document.addEventListener("click", async (e) => {
-//   const menuItem = e.target.closest(".dom_menu li");
-//   if (!menuItem) return;
-
-//   const view = menuItem.dataset.view;
-//   const loading = document.querySelector(".loading");
-
-//   // 1️⃣ Cập nhật trạng thái menu
-//   document
-//     .querySelectorAll(".dom_menu li")
-//     .forEach((li) => li.classList.toggle("active", li === menuItem));
-
-//   // 2️⃣ Ẩn toàn bộ container trước
-//   document.querySelectorAll(".dom_container").forEach((div) => {
-//     div.classList.remove("active");
-//   });
-
-//   // 3️⃣ Hiển thị đúng container
-//   const targetContainer = document.querySelector(`.dom_${view}`);
-//   if (targetContainer) {
-//     targetContainer.classList.add("active");
-//   } else {
-//     console.warn(`⚠️ Không tìm thấy .dom_${view}`);
-//   }
-
-//   // 4️⃣ Nếu là Compare thì tải dữ liệu
-//   if (view === "compare") {
-//     loading?.classList.add("active");
-//     try {
-//       const range1 = getDateRange("last_7days");
-//       const range2 = getDateRange("previous_7days");
-//       await loadCompareData(range1, range2);
-//     } catch (err) {
-//       console.error("❌ Lỗi khi tải Compare:", err);
-//     } finally {
-//       loading?.classList.remove("active");
-//     }
-//   }
-
-//   console.log("✅ Hiển thị:", view);
-// });
-
-// =======================
-// 📍 Khi click nút “Compare” (manual refresh)
-// =======================
-
-// 🔹 Tổng hợp dữ liệu cơ bản
 function summarizeCompareData(data, grouped) {
   if (!data?.length)
     return {
@@ -5102,7 +5449,7 @@ function setupLeadTagChartBySaleCompare(g1, g2) {
   }
 }
 
-function generateAdvancedCompareReport() {
+async function generateAdvancedCompareReport() {
   const reportWrap = document.querySelector(".dom_ai_report");
   if (!reportWrap)
     return console.warn("Không tìm thấy .dom_ai_report trong DOM.");
@@ -5129,25 +5476,29 @@ function generateAdvancedCompareReport() {
   `;
 
   // 🧠 Gom theo chi nhánh
-  const buildCompareGrouped = (keyword) => {
+  const buildCompareGrouped = async (keyword) => {
     const data1 = (window.CRM_DATA_1 || []).filter(
       (l) => (l.CustomField16Text || "").trim().toUpperCase() === keyword
     );
     const data2 = (window.CRM_DATA_2 || []).filter(
       (l) => (l.CustomField16Text || "").trim().toUpperCase() === keyword
     );
+    const [grouped1, grouped2] = await Promise.all([
+      processCRMData(data1),
+      processCRMData(data2),
+    ]);
     return {
       org: keyword,
-      grouped1: processCRMData(data1),
-      grouped2: processCRMData(data2),
+      grouped1,
+      grouped2,
       data1,
       data2,
     };
   };
 
   // ⚙️ Chuẩn bị dữ liệu theo từng tổ chức
-  const ideas = buildCompareGrouped("IDEAS");
-  const vtci = buildCompareGrouped("VTCI");
+  const ideas = await buildCompareGrouped("IDEAS");
+  const vtci = await buildCompareGrouped("VTCI");
 
   let html = "";
 
@@ -5216,153 +5567,6 @@ function generateAdvancedCompareReport() {
     });
   }, 3000);
 }
-function renderCompareToplist(grouped1, grouped2) {
-  const wrap1 = document.querySelector(".compare_ads_1 .dom_toplist");
-  const wrap2 = document.querySelector(".compare_ads_2 .dom_toplist");
-  if (!wrap1 || !wrap2)
-    return console.warn("Không tìm thấy compare_ads_1 hoặc compare_ads_2.");
-
-  wrap1.innerHTML = "";
-  wrap2.innerHTML = "";
-
-  // 🔹 Dựng list
-  const buildList = (grouped) => {
-    const list = [];
-    if (!grouped?.byCampaign) return list;
-    for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
-      for (const [source, mediums] of Object.entries(sources)) {
-        for (const [medium, leads] of Object.entries(mediums)) {
-          const total = leads.length;
-          const needed = leads.filter((l) => l.TagMain === "Needed").length;
-          const considering = leads.filter(
-            (l) => l.TagMain === "Considering"
-          ).length;
-          const quality = needed + considering;
-          const ratio = total ? (quality / total) * 100 : 0;
-          list.push({
-            key: `${campaign}|${source}|${medium}`,
-            campaign,
-            source,
-            medium,
-            total,
-            quality,
-            ratio: +ratio.toFixed(1),
-          });
-        }
-      }
-    }
-    return list;
-  };
-
-  const list1 = buildList(grouped1);
-  const list2 = buildList(grouped2);
-
-  const allKeys = Array.from(
-    new Set([...list1.map((x) => x.key), ...list2.map((x) => x.key)])
-  );
-
-  const getLogo = (key) => {
-    const logos = [
-      {
-        match: /facebook|fb/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
-      },
-      {
-        match: /google/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png",
-      },
-      {
-        match: /linkedin/i,
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/LinkedIn_icon.svg/1024px-LinkedIn_icon.svg.png",
-      },
-      {
-        match: /tiktok/i,
-        url: "https://www.logo.wine/a/logo/TikTok/TikTok-Icon-White-Dark-Background-Logo.wine.svg",
-      },
-      {
-        match: /Web IDEAS/i,
-        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp",
-      },
-      {
-        match: /Web VTCI/i,
-        url: "https://ideas.edu.vn/wp-content/uploads/2025/10/520821295_122209126670091888_6779497482843304564_n.webp",
-      },
-    ];
-    const logo = logos.find((x) => x.match.test(key));
-    return logo
-      ? logo.url
-      : "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
-  };
-
-  const compareList = allKeys.map((key) => {
-    const a = list1.find((x) => x.key === key);
-    const b = list2.find((x) => x.key === key);
-    const diff = (a?.ratio || 0) - (b?.ratio || 0);
-    return { key, a, b, diff, absDiff: Math.abs(diff) };
-  });
-
-  compareList.sort((x, y) => {
-    if (x.a && x.b && y.a && y.b) return y.a.total - x.a.total;
-    if (x.a && !x.b) return 1;
-    if (!x.a && y.b) return 1;
-    return y.absDiff - x.absDiff;
-  });
-
-  const renderItem = (data, cls = "") => {
-    let color = "rgb(0, 177, 72)";
-    if (data.ratio < 20) color = "rgb(225, 112, 85)";
-    else if (data.ratio < 40) color = "rgb(255, 169, 0)";
-    const rgba = color.replace("rgb(", "").replace(")", "");
-    return `
-    <li class="${cls}" data-campaign="${data.campaign}" data-source="${
-      data.source
-    }" data-medium="${data.medium}">
-      <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${
-      data.source
-    } - ${data.medium}</span></p>
-      <p><i class="fa-solid fa-user"></i><span>${data.total}</span></p>
-      <p><i class="fa-solid fa-user-graduate"></i><span>${
-        data.quality
-      }</span></p>
-      <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${
-      data.ratio
-    }%</p>
-    </li>`;
-  };
-
-  compareList.forEach((item) => {
-    let a = item.a;
-    let b = item.b;
-
-    if (!a && b) {
-      a = { ...b, total: 0, quality: 0, ratio: 0 };
-    }
-    if (!b && a) {
-      b = { ...a, total: 0, quality: 0, ratio: 0 };
-    }
-
-    // 🟩 Xác định class up/down/inactive
-    let classA = "";
-    let classB = "";
-
-    if (!item.a) classA = "inactive";
-    if (!item.b) classB = "inactive";
-
-    if (a && b) {
-      if (a.total > b.total) {
-        classA += " up";
-        classB += " down";
-      } else if (a.total < b.total) {
-        classA += " down";
-        classB += " up";
-      }
-    }
-
-    wrap1.insertAdjacentHTML("beforeend", renderItem(a, classA.trim()));
-    wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
-  });
-}
-
 function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
   if (!g1?.byOwner || !g2?.byOwner)
     return `<p class="warn fade_in_item delay-1">⚠️ Không có dữ liệu Compare cho ${orgName}.</p>`;
@@ -5379,7 +5583,7 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
   const logoMap = new Map([
     [
       "facebook",
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Logo_de_Facebook.png/1200px-Logo_de_Facebook.png",
+      "https://upload.wikimedia.org/wikipedia/commons/e/ee/Logo_de_Facebook.png",
     ],
     [
       "google",
@@ -5828,3 +6032,125 @@ function makeDeepCompareReport(g1, g2, d1, d2, orgName = "ORG") {
     <ul class="insight_list fade_in_item delay-13">${insightHTML}</ul>
   </section>`;
 }
+
+function renderCompareToplist(grouped1, grouped2) {
+  const wrap1 = document.querySelector(".compare_ads_1 .dom_toplist");
+  const wrap2 = document.querySelector(".compare_ads_2 .dom_toplist");
+  if (!wrap1 || !wrap2)
+    return console.warn("Không tìm thấy compare_ads_1 hoặc compare_ads_2.");
+
+  wrap1.innerHTML = "";
+  wrap2.innerHTML = "";
+
+  // 🔹 Dựng list
+  const buildList = (grouped) => {
+    const list = [];
+    if (!grouped?.byCampaign) return list;
+    for (const [campaign, sources] of Object.entries(grouped.byCampaign)) {
+      for (const [source, mediums] of Object.entries(sources)) {
+        for (const [medium, leads] of Object.entries(mediums)) {
+          const total = leads.length;
+          const needed = leads.filter((l) => l.TagMain === "Needed").length;
+          const considering = leads.filter(
+            (l) => l.TagMain === "Considering"
+          ).length;
+          const quality = needed + considering;
+          const ratio = total ? (quality / total) * 100 : 0;
+          list.push({
+            key: `${campaign}|${source}|${medium}`,
+            campaign,
+            source,
+            medium,
+            total,
+            quality,
+            ratio: +ratio.toFixed(1),
+          });
+        }
+      }
+    }
+    return list;
+  };
+
+  const list1 = buildList(grouped1);
+  const list2 = buildList(grouped2);
+
+  const allKeys = Array.from(
+    new Set([...list1.map((x) => x.key), ...list2.map((x) => x.key)])
+  );
+
+  const getLogo = (key) => {
+    const logo = logos.find((x) => x.match.test(key));
+    return logo
+      ? logo.url
+      : "https://ideas.edu.vn/wp-content/uploads/2025/10/518336360_122227900856081421_6060559121060410681_n.webp";
+  };
+
+  const compareList = allKeys.map((key) => {
+    const a = list1.find((x) => x.key === key);
+    const b = list2.find((x) => x.key === key);
+    const diff = (a?.ratio || 0) - (b?.ratio || 0);
+    return { key, a, b, diff, absDiff: Math.abs(diff) };
+  });
+
+  compareList.sort((x, y) => {
+    if (x.a && x.b && y.a && y.b) return y.a.total - x.a.total;
+    if (x.a && !x.b) return 1;
+    if (!x.a && y.b) return 1;
+    return y.absDiff - x.absDiff;
+  });
+
+  const renderItem = (data, cls = "") => {
+    let color = "rgb(0, 177, 72)";
+    if (data.ratio < 20) color = "rgb(225, 112, 85)";
+    else if (data.ratio < 40) color = "rgb(255, 169, 0)";
+    const rgba = color.replace("rgb(", "").replace(")", "");
+    return `
+    <li class="${cls}" data-campaign="${data.campaign}" data-source="${
+      data.source
+    }" data-medium="${data.medium}">
+      <p><img src="${getLogo(data.key)}"/><span>${data.campaign} - ${
+      data.source
+    } - ${data.medium}</span></p>
+      <p><i class="fa-solid fa-user"></i><span>${data.total}</span></p>
+      <p><i class="fa-solid fa-user-graduate"></i><span>${
+        data.quality
+      }</span></p>
+      <p class="toplist_percent" style="color:${color}; background:rgba(${rgba},0.1)">${
+      data.ratio
+    }%</p>
+    </li>`;
+  };
+
+  compareList.forEach((item) => {
+    let a = item.a;
+    let b = item.b;
+
+    if (!a && b) {
+      a = { ...b, total: 0, quality: 0, ratio: 0 };
+    }
+    if (!b && a) {
+      b = { ...a, total: 0, quality: 0, ratio: 0 };
+    }
+
+    // 🟩 Xác định class up/down/inactive
+    let classA = "";
+    let classB = "";
+
+    if (!item.a) classA = "inactive";
+    if (!item.b) classB = "inactive";
+
+    if (a && b) {
+      if (a.total > b.total) {
+        classA += " up";
+        classB += " down";
+      } else if (a.total < b.total) {
+        classA += " down";
+        classB += " up";
+      }
+    }
+
+    wrap1.insertAdjacentHTML("beforeend", renderItem(a, classA.trim()));
+    wrap2.insertAdjacentHTML("beforeend", renderItem(b, classB.trim()));
+  });
+}
+

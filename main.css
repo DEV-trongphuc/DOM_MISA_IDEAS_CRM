@@ -2420,3 +2420,305 @@ tbody {
   display: none;
 }
 
+/* Time Picker Panel - FB Ads Style */
+.time .dom_select_show {
+  display: flex !important;
+  flex-direction: row !important;
+  width: 72rem !important;
+  max-width: 95vw;
+  max-height: unset !important;
+  overflow: visible !important;
+  padding: 0;
+  gap: 0;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  clip-path: unset !important;
+}
+
+.time_picker_sidebar {
+  width: 15rem;
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 1rem 0;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.time_picker_sidebar ul {
+  display: flex;
+  flex-direction: column;
+}
+
+.time_picker_sidebar li {
+  padding: 1rem 1.5rem !important;
+  font-size: 1.25rem !important;
+  color: var(--textMid);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.time_picker_sidebar li .radio_box {
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.time_picker_sidebar li.active .radio_box {
+  border-color: var(--mainClr);
+}
+
+.time_picker_sidebar li.active .radio_box::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 0.8rem;
+  height: 0.8rem;
+  background: var(--mainClr);
+  border-radius: 50%;
+}
+
+.time_picker_sidebar li:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--mainClr);
+}
+
+.time_picker_sidebar li.active {
+  background: var(--bgGoldActive);
+  color: var(--mainClr);
+  font-weight: 500;
+}
+
+.time_picker_content {
+  flex: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.time_picker_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.time_picker_header h3 {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: var(--textClr);
+}
+
+.calendar_container {
+  display: flex;
+  gap: 2rem;
+  min-height: 22rem;
+}
+
+.calendar_card {
+  flex: 1;
+}
+
+.calendar_nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.calendar_nav span {
+  font-weight: bold;
+  font-size: 1.3rem;
+}
+
+.calendar_nav button {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: var(--borderFaint);
+  font-size: 1.1rem;
+  transition: 0.2s;
+}
+
+.calendar_nav button:hover {
+  background: var(--mainClr);
+  color: white;
+}
+
+.calendar_grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+
+.calendar_day_name {
+  font-size: 1.1rem;
+  color: var(--textFaint999);
+  padding-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.calendar_day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--textClr444);
+  transition: background 0.2s;
+}
+
+.calendar_day:hover:not(.empty) {
+  background: var(--mainClr-soft);
+}
+
+.calendar_day.selected {
+  background: var(--mainClr) !important;
+  color: white !important;
+  font-weight: 700;
+}
+
+.calendar_day.selected.start {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.calendar_day.selected.end {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.calendar_day.in_range {
+  background: var(--mainClr-soft);
+  border-radius: 0;
+  color: var(--mainClr);
+  font-weight: 600;
+}
+
+.calendar_day.today {
+  border: 1px solid var(--mainClr);
+  color: var(--mainClr);
+  font-weight: bold;
+}
+
+.time_picker_footer {
+  margin-top: auto;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.picker_inputs {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.picker_inputs input {
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--borderDdd);
+  border-radius: 6px;
+  font-size: 1.2rem;
+  width: 12rem;
+  outline: none;
+}
+
+.picker_inputs input:focus {
+  border-color: var(--mainClr);
+  box-shadow: 0 0 0 2px var(--mainClr-bg);
+}
+
+.picker_actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.picker_actions button {
+  padding: 0.8rem 2rem;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn_cancel {
+  background: #f5f5f5;
+  color: var(--textMid666);
+}
+
+.btn_cancel:hover {
+  background: #eee;
+}
+
+.btn_update {
+  background: var(--mainClr);
+  color: white;
+  box-shadow: 0 2px 5px var(--mainClr-shadow);
+}
+
+.btn_update:hover {
+  background: #e69900;
+  transform: translateY(-1px);
+}
+
+/* Glassmorphism for the panel */
+.time .time_picker_panel {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), 0 1px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+
+.calendar_day.empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+.calendar_day.selected:hover {
+  background: var(--mainClr);
+}
+
+.calendar_grid .calendar_day {
+  height: 3.2rem;
+  width: 3.2rem;
+  line-height: 3.2rem;
+  margin: 1px;
+}
+
+/* Scroll Performance - Virtualization helper */
+.dom_table_box,
+.dom_toplist_wrap {
+  content-visibility: auto;
+  contain-intrinsic-size: 1000px;
+}
+
+/* Skeleton Loading Glow animation */
+.skeleton-glow {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading-glow 1.5s infinite linear;
+}
+
+@keyframes loading-glow {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+

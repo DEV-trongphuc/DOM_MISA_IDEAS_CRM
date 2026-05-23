@@ -3,6 +3,20 @@ console.log = () => {};
 console.warn = () => {};
 console.error = () => {};
 
+// =================== DATE PICKER STATE ===================
+let calendarCurrentMonth = new Date().getMonth();
+let calendarCurrentYear = new Date().getFullYear();
+let startDate = null;
+let endDate = null;
+let tempStartDate = null;
+let tempEndDate = null;
+
+// =================== NETWORK CACHE ===================
+const NETWORK_CACHE = new Map();
+const NETWORK_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+
+
 // ===== Perf Utils (drop-in) =====
 const $$ = (sel, root = document) => root.querySelector(sel);
 const $$$ = (sel, root = document) => root.querySelectorAll(sel);
@@ -77,6 +91,7 @@ let CRM_DATA = [];
 let VIEW_DATA = [];
 let VIEW_DEGREE = [];
 let ACCOUNT_DATA;
+let ACCOUNT_GROUPED = null;
 const compareState = {
   range1: "last_7days",
   range2: "previous_7days",
@@ -319,6 +334,17 @@ async function fetchLeadData(from, to, token) {
 }
 
 async function fetchLeads(from, to) {
+  const cacheKey = `${from}_${to}`;
+  const now = Date.now();
+  if (NETWORK_CACHE.has(cacheKey)) {
+    const cached = NETWORK_CACHE.get(cacheKey);
+    if (now - cached.timestamp < NETWORK_CACHE_TTL_MS) {
+      console.log(`🚀 Serving from NETWORK_CACHE for ${cacheKey}`);
+      CRM_DATA = cached.data;
+      return cached.data;
+    }
+  }
+
   let data = null;
   let token = null;
   try {
@@ -356,6 +382,9 @@ async function fetchLeads(from, to) {
         document.querySelector(".loading")?.classList.remove("active");
       }
 
+      if (Array.isArray(data)) {
+        NETWORK_CACHE.set(cacheKey, { data, timestamp: now });
+      }
       return data || [];
     }
 
@@ -397,11 +426,17 @@ async function fetchLeads(from, to) {
 
     if (!data?.length) {
       console.log("ℹ️ Không có dữ liệu (nhưng token hợp lệ).");
+      if (Array.isArray(data)) {
+        NETWORK_CACHE.set(cacheKey, { data, timestamp: now });
+      }
       return [];
     }
 
     console.log(`✅ Đã tải ${data.length} leads`);
     CRM_DATA = data;
+    if (Array.isArray(data)) {
+      NETWORK_CACHE.set(cacheKey, { data, timestamp: now });
+    }
   } catch (err) {
     console.error("🚨 Lỗi fetchLeads:", err);
     alert("Không thể kết nối đến IDEAS CRM!");
@@ -499,11 +534,13 @@ async function main() {
   loading.classList.add("active");
   performance.mark("start_main");
   const items = document.querySelectorAll(".dom_dashboard .dom_fade_item");
-
   const initRange = getDateRange("last_7days");
+  startDate = initRange.from;
+  endDate = initRange.to;
+  tempStartDate = startDate;
+  tempEndDate = endDate;
   const dateText = document.querySelector(".dom_date");
-  dateText.textContent = formatDisplayDate(initRange.from, initRange.to);
-
+  dateText.textContent = formatDisplayDate(startDate, endDate);
   const t0 = performance.now();
   RAW_DATA = await fetchLeads(initRange.from, initRange.to);
   console.log(`✅ FetchLeads done in ${(performance.now() - t0).toFixed(1)}ms`);
@@ -539,22 +576,23 @@ async function main() {
   console.timeEnd("⏱ DOM Dashboard Loaded");
 })();
 
-function generateAdvancedReport(RAW_DATA) {
+async function generateAdvancedReport(RAW_DATA) {
   if (!GROUPED || !Array.isArray(RAW_DATA)) {
     console.warn("generateAdvancedReport: Dữ liệu đầu vào không hợp lệ.");
     return;
   }
 
   // 🧩 Gom grouped theo chi nhánh
-  const buildGroupedForOrg = (orgKeyword) => {
+  const buildGroupedForOrg = async (orgKeyword) => {
     const orgData = RAW_DATA.filter(
       (l) => (l.CustomField16Text || "").trim().toUpperCase() === orgKeyword
     );
-    return { data: orgData, grouped: processCRMData(orgData) };
+    const grouped = await processCRMData(orgData);
+    return { data: orgData, grouped };
   };
 
-  const ideas = buildGroupedForOrg("IDEAS");
-  const vtci = buildGroupedForOrg("VTCI");
+  const ideas = await buildGroupedForOrg("IDEAS");
+  const vtci = await buildGroupedForOrg("VTCI");
 
   // 🧠 Tạo báo cáo riêng từng bên
   const ideasReport = makeDeepReport(ideas.grouped, ideas.data, "IDEAS");
@@ -601,7 +639,7 @@ async function generateSaleReportAI(SALE_DATA, saleName = "SALE") {
     return;
   }
 
-  const GROUPED = processCRMData(SALE_DATA);
+  const GROUPED = await processCRMData(SALE_DATA);
   const reportHTML = makeSaleAIReport(GROUPED, SALE_DATA, saleName);
 
   // 🗓️ Lấy thời gian hiển thị từ DOM
@@ -1143,7 +1181,10 @@ async function processAndRenderAll(data, isLoad) {
   if (!data?.length) return;
 
   GROUPED = await processCRMData(data);
-  if (isLoad) ACCOUNT_DATA = data;
+  if (isLoad) {
+    ACCOUNT_DATA = data;
+    ACCOUNT_GROUPED = GROUPED;
+  }
 
   scheduleIdle(() => renderChartsSmoothly(GROUPED), 80);
   scheduleRAF(() => {
@@ -1183,8 +1224,21 @@ function renderChartsSmoothly(GROUPED) {
 }
 
 function processCRMData(data) {
-  if (!data?.length) {
-    return {
+  return new Promise((resolve) => {
+    if (!data?.length) {
+      resolve({
+        byDate: Object.create(null),
+        byCampaign: Object.create(null),
+        byOwner: Object.create(null),
+        byTag: Object.create(null),
+        byTagAndDate: Object.create(null),
+        byOrg: Object.create(null),
+        tagFrequency: Object.create(null),
+      });
+      return;
+    }
+
+    const r = {
       byDate: Object.create(null),
       byCampaign: Object.create(null),
       byOwner: Object.create(null),
@@ -1193,87 +1247,80 @@ function processCRMData(data) {
       byOrg: Object.create(null),
       tagFrequency: Object.create(null),
     };
-  }
 
-  const r = {
-    byDate: Object.create(null),
-    byCampaign: Object.create(null),
-    byOwner: Object.create(null),
-    byTag: Object.create(null),
-    byTagAndDate: Object.create(null),
-    byOrg: Object.create(null),
-    tagFrequency: Object.create(null),
-  };
+    const len = data.length;
+    const tagPriorityLocal = tagPriority || [];
+    const getTagsArrayLocal = getTagsArray;
+    const getPrimaryTagLocal = getPrimaryTag;
 
-  const len = data.length;
-  const tagPriorityLocal = tagPriority || [];
-  const getTagsArrayLocal = getTagsArray;
-  const getPrimaryTagLocal = getPrimaryTag;
+    const BATCH = 4000;
+    let i = 0;
 
-  const BATCH = 4000;
-  let i = 0;
+    const work = () => {
+      const end = Math.min(i + BATCH, len);
+      for (; i < end; i++) {
+        const lead = data[i];
 
-  const work = () => {
-    const end = Math.min(i + BATCH, len);
-    for (; i < end; i++) {
-      const lead = data[i];
+        const date = lead.CreatedDate ? lead.CreatedDate.slice(0, 10) : "Unknown";
+        const tags = getTagsArrayLocal(lead.TagIDText);
+        let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
+        if (mainTag === "Qualified") mainTag = "Needed";
+        if (tags.length === 0) tags.push("Untag");
+        lead.TagMain = mainTag;
 
-      const date = lead.CreatedDate ? lead.CreatedDate.slice(0, 10) : "Unknown";
-      const tags = getTagsArrayLocal(lead.TagIDText);
-      let mainTag = getPrimaryTagLocal(tags, tagPriorityLocal) || "Untag";
-      if (mainTag === "Qualified") mainTag = "Needed";
-      if (tags.length === 0) tags.push("Untag");
-      lead.TagMain = mainTag;
+        const org = lead.CustomField16Text || "Org";
+        const campaign = lead.CustomField13Text || "Campaign";
+        const source = lead.CustomField14Text || "Source";
+        const medium = lead.CustomField15Text || "Medium";
+        const ownerKey = (lead.OwnerIDText || "No Owner")
+          .replace(/\s*\(NV.*?\)\s*/gi, "")
+          .trim();
 
-      const org = lead.CustomField16Text || "Org";
-      const campaign = lead.CustomField13Text || "Campaign";
-      const source = lead.CustomField14Text || "Source";
-      const medium = lead.CustomField15Text || "Medium";
-      const ownerKey = (lead.OwnerIDText || "No Owner")
-        .replace(/\s*\(NV.*?\)\s*/gi, "")
-        .trim();
+        for (let j = 0; j < tags.length; j++)
+          r.tagFrequency[tags[j]] = (r.tagFrequency[tags[j]] || 0) + 1;
 
-      for (let j = 0; j < tags.length; j++)
-        r.tagFrequency[tags[j]] = (r.tagFrequency[tags[j]] || 0) + 1;
+        const d = (r.byDate[date] ||= { total: 0 });
+        d.total++;
+        d[mainTag] = (d[mainTag] || 0) + 1;
 
-      const d = (r.byDate[date] ||= { total: 0 });
-      d.total++;
-      d[mainTag] = (d[mainTag] || 0) + 1;
+        (r.byTag[mainTag] ||= []).push(lead);
+        ((r.byTagAndDate[mainTag] ||= Object.create(null))[date] ||= []).push(
+          lead
+        );
+        (((r.byCampaign[campaign] ||= Object.create(null))[source] ||=
+          Object.create(null))[medium] ||= []).push(lead);
 
-      (r.byTag[mainTag] ||= []).push(lead);
-      ((r.byTagAndDate[mainTag] ||= Object.create(null))[date] ||= []).push(
-        lead
-      );
-      (((r.byCampaign[campaign] ||= Object.create(null))[source] ||=
-        Object.create(null))[medium] ||= []).push(lead);
+        const ownerObj = (r.byOwner[ownerKey] ||= {
+          total: 0,
+          tags: Object.create(null),
+          leads: [],
+        });
+        ownerObj.total++;
+        ownerObj.leads.push(lead);
+        const ot = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
+        ot.count++;
+        ot.leads.push(lead);
 
-      const ownerObj = (r.byOwner[ownerKey] ||= {
-        total: 0,
-        tags: Object.create(null),
-        leads: [],
-      });
-      ownerObj.total++;
-      ownerObj.leads.push(lead);
-      const ot = (ownerObj.tags[mainTag] ||= { count: 0, leads: [] });
-      ot.count++;
-      ot.leads.push(lead);
+        const orgObj = (r.byOrg[org] ||= {
+          total: 0,
+          tags: Object.create(null),
+          owners: Object.create(null),
+          byDate: Object.create(null),
+        });
+        orgObj.total++;
+        (orgObj.tags[mainTag] ||= []).push(lead);
+        (orgObj.owners[ownerKey] ||= []).push(lead);
+        (orgObj.byDate[date] ||= []).push(lead);
+      }
+      if (i < len) {
+        scheduleIdle(work, 60);
+      } else {
+        resolve(r);
+      }
+    };
 
-      const orgObj = (r.byOrg[org] ||= {
-        total: 0,
-        tags: Object.create(null),
-        owners: Object.create(null),
-        byDate: Object.create(null),
-      });
-      orgObj.total++;
-      (orgObj.tags[mainTag] ||= []).push(lead);
-      (orgObj.owners[ownerKey] ||= []).push(lead);
-      (orgObj.byDate[date] ||= []).push(lead);
-    }
-    if (i < len) scheduleIdle(work, 60);
-  };
-
-  work();
-  return r;
+    work();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1354,7 +1401,7 @@ function renderFilterOptions(grouped) {
   sourceSelect.innerHTML = "";
   mediumSelect.innerHTML = "";
 
-  const group = processCRMData(ACCOUNT_DATA);
+  const group = ACCOUNT_GROUPED || grouped;
   // 🔹 Campaign
   const fragCamp = document.createDocumentFragment();
   for (const [campaign, sources] of Object.entries(group.byCampaign || {})) {
@@ -2180,101 +2227,275 @@ function setupAccountFilter() {
   });
 }
 
+// Helper to format date in Local Time (YYYY-MM-DD)
+function formatDateLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function renderCalendar() {
+  const container = document.getElementById("calendar_left");
+  if (!container) return;
+
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  const firstDayOfMonth = new Date(calendarCurrentYear, calendarCurrentMonth, 1).getDay();
+  const daysInMonth = new Date(calendarCurrentYear, calendarCurrentMonth + 1, 0).getDate();
+
+  let html = `
+    <div class="calendar_nav">
+      <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+      <span>${monthNames[calendarCurrentMonth]} ${calendarCurrentYear}</span>
+      <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+    <div class="calendar_grid">
+      <div class="calendar_day_name">Su</div>
+      <div class="calendar_day_name">Mo</div>
+      <div class="calendar_day_name">Tu</div>
+      <div class="calendar_day_name">We</div>
+      <div class="calendar_day_name">Th</div>
+      <div class="calendar_day_name">Fr</div>
+      <div class="calendar_day_name">Sa</div>
+  `;
+
+  // Empty slots for previous month
+  for (let i = 0; i < firstDayOfMonth; i++) {
+    html += `<div class="calendar_day empty"></div>`;
+  }
+
+  const todayStr = formatDateLocal(new Date());
+  const start = tempStartDate ? new Date(tempStartDate) : null;
+  const end = tempEndDate ? new Date(tempEndDate) : null;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const curDate = new Date(calendarCurrentYear, calendarCurrentMonth, day);
+    const curDateStr = formatDateLocal(curDate);
+
+    let classes = ["calendar_day"];
+    if (curDateStr === todayStr) classes.push("today");
+
+    if (start && curDateStr === tempStartDate) classes.push("selected");
+    if (end && curDateStr === tempEndDate) classes.push("selected");
+
+    if (start && end && curDate > start && curDate < end) {
+      classes.push("in_range");
+    }
+
+    html += `<div class="${classes.join(' ')}" onclick="selectCalendarDay('${curDateStr}')">${day}</div>`;
+  }
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+window.changeMonth = (dir) => {
+  calendarCurrentMonth += dir;
+  if (calendarCurrentMonth < 0) {
+    calendarCurrentMonth = 11;
+    calendarCurrentYear--;
+  } else if (calendarCurrentMonth > 11) {
+    calendarCurrentMonth = 0;
+    calendarCurrentYear++;
+  }
+  renderCalendar();
+};
+
+window.selectCalendarDay = (dateStr) => {
+  const startInput = document.getElementById("start_date_val");
+  const endInput = document.getElementById("end_date_val");
+
+  if (!tempStartDate || (tempStartDate && tempEndDate)) {
+    // Start fresh selection
+    tempStartDate = dateStr;
+    tempEndDate = null;
+    startInput.value = dateStr;
+    endInput.value = "";
+  } else {
+    // Selecting the end date
+    if (dateStr === tempStartDate) {
+      // Deselect if clicking the same day twice when no end date set
+      tempStartDate = null;
+      startInput.value = "";
+    } else {
+      const s = new Date(tempStartDate);
+      const e = new Date(dateStr);
+
+      if (e < s) {
+        tempEndDate = tempStartDate;
+        tempStartDate = dateStr;
+      } else {
+        tempEndDate = dateStr;
+      }
+
+      startInput.value = tempStartDate;
+      endInput.value = tempEndDate;
+    }
+  }
+
+  // Highlight "Custom Date" in sidebar
+  const presetItems = document.querySelectorAll(".time_picker_sidebar li[data-date]");
+  presetItems.forEach(i => i.classList.remove("active"));
+  const customLi = document.querySelector('li[data-date="custom_range"]');
+  if (customLi) customLi.classList.add("active");
+
+  renderCalendar();
+};
+
 function setupTimeDropdown() {
   const timeSelect = document.querySelector(".dom_select.time");
   if (!timeSelect) return;
 
   const toggle = timeSelect.querySelector(".flex");
-  const list = timeSelect.querySelector(".dom_select_show");
+  const panel = timeSelect.querySelector(".time_picker_panel");
   const selectedLabel = timeSelect.querySelector(".dom_selected");
   const dateText = document.querySelector(".dom_date");
-  const applyBtn = timeSelect.querySelector(".apply_custom_date");
-  const customBox = timeSelect.querySelector(".custom_date");
-  const allItems = list.querySelectorAll("li");
+  const presetItems = panel.querySelectorAll(".time_picker_sidebar li[data-date]");
+  const updateBtn = panel.querySelector(".btn_update");
+  const cancelBtn = panel.querySelector(".btn_cancel");
+  const startInput = panel.querySelector("#start_date_val");
+  const endInput = panel.querySelector("#end_date_val");
 
-  // 🟡 Toggle dropdown
-  toggle.onclick = (e) => {
+  // Initial display sync
+  if (startDate && endDate) {
+    startInput.value = startDate;
+    endInput.value = endDate;
+    tempStartDate = startDate;
+    tempEndDate = endDate;
+  }
+
+  // Prevent clicks inside the panel from bubbling
+  panel.addEventListener("click", (e) => {
     e.stopPropagation();
-    document
-      .querySelectorAll(".dom_select_show")
-      .forEach((ul) => ul !== list && ul.classList.remove("active"));
-    list.classList.toggle("active");
-  };
+  });
 
-  // 🟢 Chọn preset thời gian
-  allItems.forEach((li) => {
-    li.onclick = async (e) => {
+  // Toggle dropdown
+  toggle.addEventListener("click", (e) => {
+    if (e.target.closest(".time_picker_panel")) return;
+    e.stopPropagation();
+
+    const isActive = panel.classList.contains("active");
+    // Close all other dropdowns
+    document.querySelectorAll(".dom_select_show").forEach(p => p.classList.remove("active"));
+
+    if (!isActive) {
+      panel.classList.add("active");
+      renderCalendar();
+    }
+  });
+
+  // Handle sidebar presets
+  presetItems.forEach((item) => {
+    item.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const type = li.dataset.date;
+      const type = item.dataset.date;
+
+      // Reset active state
+      presetItems.forEach((i) => i.classList.remove("active"));
+      item.classList.add("active");
 
       if (type === "custom_range") {
-        allItems.forEach((i) => i.classList.remove("active"));
-        li.classList.add("active");
-        customBox.classList.add("show");
         return;
       }
 
-      // reset active
-      allItems.forEach((i) => i.classList.remove("active"));
-      li.classList.add("active");
-      customBox.classList.remove("show");
-
-      const label = li.querySelector("span:last-child").textContent.trim();
-      selectedLabel.textContent = label;
-
       const range = getDateRange(type);
-      dateText.textContent = formatDisplayDate(range.from, range.to);
-      // ✅ Fetch lại theo ngày
+      startDate = range.from;
+      endDate = range.to;
+      tempStartDate = startDate;
+      tempEndDate = endDate;
+
+      startInput.value = startDate;
+      endInput.value = endDate;
+
+      const label = item.querySelector('span:last-child').textContent.trim();
+      selectedLabel.textContent = label;
+      
+      dateText.textContent = formatDisplayDate(startDate, endDate);
+
+      // Refresh dashboard with data fetch
       const loading = document.querySelector(".loading");
       loading.classList.add("active");
-      RAW_DATA = await fetchLeads(range.from, range.to);
-      // ✅ Reset account về “Total Data”
+      RAW_DATA = await fetchLeads(startDate, endDate);
       localStorage.setItem("selectedAccount", "Total Data");
       setActiveAccountUI("Total Data");
       processAndRenderAll(RAW_DATA, true);
-      list.classList.remove("active");
+      
+      panel.classList.remove("active");
       loading.classList.remove("active");
-    };
+    });
   });
 
-  // 🟠 Custom date apply
-  applyBtn.onclick = async (e) => {
-    e.stopPropagation();
-    const start = document.getElementById("start").value;
-    const end = document.getElementById("end").value;
+  // Cancel button
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      panel.classList.remove("active");
+      tempStartDate = startDate;
+      tempEndDate = endDate;
+    });
+  }
 
-    if (!start || !end)
-      return alert("⚠️ Vui lòng chọn đủ ngày bắt đầu và kết thúc!");
+  // Update button
+  if (updateBtn) {
+    updateBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const start = startInput.value;
+      const end = endInput.value;
 
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const minDate = new Date("2025-08-01");
+      if (!start || !end) {
+        alert("⛔ Vui lòng chọn đầy đủ ngày!");
+        return;
+      }
 
-    if (startDate < minDate)
-      return alert("⚠️ Ngày bắt đầu không được trước 01/08/2025!");
-    if (endDate <= startDate)
-      return alert("⚠️ Ngày kết thúc phải sau ngày bắt đầu!");
+      const s = new Date(start);
+      const eD = new Date(end);
+      if (eD < s) {
+        alert("⚠️ Ngày kết thúc phải sau ngày bắt đầu!");
+        return;
+      }
+      
+      const minDate = new Date("2025-08-01");
+      if (s < minDate) {
+        alert("⚠️ Ngày bắt đầu không được trước 01/08/2025!");
+        return;
+      }
 
-    selectedLabel.textContent = "Custom Date";
-    dateText.textContent = formatDisplayDate(start, end);
-    // ✅ Fetch lại
-    const loading = document.querySelector(".loading");
-    loading.classList.add("active");
-    RAW_DATA = await fetchLeads(start, end);
-    processAndRenderAll(RAW_DATA, true);
-    // ✅ Reset account về “Total Data”
-    localStorage.setItem("selectedAccount", "Total Data");
-    setActiveAccountUI("Total Data");
-    list.classList.remove("active");
-    customBox.classList.remove("show");
-    loading.classList.remove("active");
-  };
+      startDate = start;
+      endDate = end;
+      selectedLabel.textContent = "Custom Date";
+      dateText.textContent = formatDisplayDate(start, end);
 
-  // 🔹 Đóng khi click ra ngoài
+      const loading = document.querySelector(".loading");
+      loading.classList.add("active");
+      RAW_DATA = await fetchLeads(startDate, endDate);
+      localStorage.setItem("selectedAccount", "Total Data");
+      setActiveAccountUI("Total Data");
+      processAndRenderAll(RAW_DATA, true);
+
+      panel.classList.remove("active");
+      loading.classList.remove("active");
+    });
+  }
+
+  // Handle manual input changes
+  startInput.addEventListener('change', () => {
+    tempStartDate = startInput.value;
+    renderCalendar();
+  });
+  endInput.addEventListener('change', () => {
+    tempEndDate = endInput.value;
+    renderCalendar();
+  });
+
+  // Close dropdown on click outside
   document.addEventListener("click", (e) => {
-    if (!timeSelect.contains(e.target)) list.classList.remove("active");
+    if (!timeSelect.contains(e.target)) {
+      panel.classList.remove("active");
+    }
   });
 }
+
 function setupDropdowns() {
   const showSelectors =
     ".dom_select.saleperson_detail .dom_select_show, .dom_select.campaign .dom_select_show, .dom_select.source .dom_select_show, .dom_select.medium .dom_select_show";
@@ -2614,7 +2835,7 @@ function renderToplist(grouped, mode = "default") {
 // ======================
 // ⚙️ Nút toggle chế độ lọc
 // ======================
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
   // --- 1️⃣ Đóng sale detail ---
   const backBtn =
     e.target.closest(".sale_report .sale_report_close") ||
@@ -2623,7 +2844,7 @@ document.addEventListener("click", (e) => {
     const dashboard = document.querySelector(".dom_dashboard");
     if (dashboard) {
       dashboard.classList.remove("sale_detail_ads", "sale_detail");
-      processAndRenderAll(ACCOUNT_DATA); // 🔁 quay về dataset hiện tại
+      await processAndRenderAll(ACCOUNT_DATA); // 🔁 quay về dataset hiện tại
     }
     setSourceActive();
     return;
@@ -2636,7 +2857,7 @@ document.addEventListener("click", (e) => {
     if (!panel) return;
 
     // Gọi báo cáo
-    generateAdvancedReport(CRM_DATA);
+    await generateAdvancedReport(CRM_DATA);
 
     // Kích hoạt panel
     panel.classList.add("active");
@@ -2663,7 +2884,7 @@ document.addEventListener("click", (e) => {
   if (aiCompareBtn) {
     const panel = document.querySelector(".dom_ai_report");
     if (!panel) return;
-    generateAdvancedCompareReport();
+    await generateAdvancedCompareReport();
     // Kích hoạt panel
     panel.classList.add("active");
     const dom_ai_report_content = document.querySelector(
@@ -2680,7 +2901,7 @@ document.addEventListener("click", (e) => {
     );
     const saleName =
       activeSaleEl?.textContent?.trim() || VIEW_DATA[0]?.OwnerIDText || "Sale";
-    generateSaleReportAI(VIEW_DATA, saleName);
+    await generateSaleReportAI(VIEW_DATA, saleName);
     // Kích hoạt panel
     panel.classList.add("active");
 
@@ -3981,12 +4202,7 @@ function renderToplistBySale(grouped) {
 
 // 🔹 Filter sale chính xác tên clean
 function filterBySaleExact(saleName, account) {
-  let group;
-  if (account !== "Total Data") {
-    group = processCRMData(ACCOUNT_DATA);
-  } else {
-    group = processCRMData(RAW_DATA);
-  }
+  const group = ACCOUNT_GROUPED || GROUPED;
 
   if (!group?.byOwner) return [];
   const matchedSales = Object.keys(group.byOwner).filter(
@@ -3997,19 +4213,8 @@ function filterBySaleExact(saleName, account) {
 
 // 🔹 Render dropdown sale từ dữ liệu tổng
 function renderSaleDropdown() {
-  let filteredData = RAW_DATA;
-  const currentAccount =
-    localStorage.getItem("selectedAccount") || "Total Data";
-  if (currentAccount === "VTCI") {
-    filteredData = RAW_DATA.filter(
-      (l) => l.CustomField16Text?.trim().toUpperCase() == "VTCI"
-    );
-  } else if (currentAccount === "IDEAS") {
-    filteredData = RAW_DATA.filter(
-      (l) => l.CustomField16Text?.trim().toUpperCase() == "IDEAS"
-    );
-  }
-  const group = processCRMData(filteredData);
+  const group = ACCOUNT_GROUPED || GROUPED;
+  if (!group?.byOwner) return;
   const saleDetailUI = document.querySelector(".sale_report");
   const dropdown = saleDetailUI.querySelector(
     ".saleperson_detail .dom_select_show"
@@ -4172,8 +4377,8 @@ async function loadCompareData(range1, range2) {
     const data2 = filterByAccount(data2Raw, currentAccount);
 
     // 🧠 Process + Summary
-    const g1 = processCRMData(data1);
-    const g2 = processCRMData(data2);
+    const g1 = await processCRMData(data1);
+    const g2 = await processCRMData(data2);
     const summary1 = summarizeCompareData(data1, g1);
     const summary2 = summarizeCompareData(data2, g2);
 
@@ -5244,7 +5449,7 @@ function setupLeadTagChartBySaleCompare(g1, g2) {
   }
 }
 
-function generateAdvancedCompareReport() {
+async function generateAdvancedCompareReport() {
   const reportWrap = document.querySelector(".dom_ai_report");
   if (!reportWrap)
     return console.warn("Không tìm thấy .dom_ai_report trong DOM.");
@@ -5271,25 +5476,29 @@ function generateAdvancedCompareReport() {
   `;
 
   // 🧠 Gom theo chi nhánh
-  const buildCompareGrouped = (keyword) => {
+  const buildCompareGrouped = async (keyword) => {
     const data1 = (window.CRM_DATA_1 || []).filter(
       (l) => (l.CustomField16Text || "").trim().toUpperCase() === keyword
     );
     const data2 = (window.CRM_DATA_2 || []).filter(
       (l) => (l.CustomField16Text || "").trim().toUpperCase() === keyword
     );
+    const [grouped1, grouped2] = await Promise.all([
+      processCRMData(data1),
+      processCRMData(data2),
+    ]);
     return {
       org: keyword,
-      grouped1: processCRMData(data1),
-      grouped2: processCRMData(data2),
+      grouped1,
+      grouped2,
       data1,
       data2,
     };
   };
 
   // ⚙️ Chuẩn bị dữ liệu theo từng tổ chức
-  const ideas = buildCompareGrouped("IDEAS");
-  const vtci = buildCompareGrouped("VTCI");
+  const ideas = await buildCompareGrouped("IDEAS");
+  const vtci = await buildCompareGrouped("VTCI");
 
   let html = "";
 
