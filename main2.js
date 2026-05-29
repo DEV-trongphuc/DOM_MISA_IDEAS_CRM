@@ -159,7 +159,7 @@ function waitForOTP(timeout = 60000) {
 // Step 3: lấy token CRM
 // =========================
 async function doStep3() {
-  const res3 = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
+  const res3 = await fetch("https://open.domation.net/proxy/login_otp.php?step=crm", {
     method: "POST",
   });
   const data3 = await res3.json();
@@ -193,7 +193,7 @@ async function quickLogin() {
   }
 
   // Fetch new token
-  const res = await fetch("https://ideas.edu.vn/login_otp.php?step=crm", {
+  const res = await fetch("https://open.domation.net/proxy/login_otp.php?step=crm", {
     method: "POST",
   });
 
@@ -233,7 +233,7 @@ async function loginFlow(username, password) {
   form1.append("Username", username);
   form1.append("Password", password);
 
-  const res1 = await fetch("https://ideas.edu.vn/login_otp.php?step=login", {
+  const res1 = await fetch("https://open.domation.net/proxy/login_otp.php?step=login", {
     method: "POST",
     body: form1,
   });
@@ -254,7 +254,7 @@ async function loginFlow(username, password) {
   form2.append("OTP", otp);
   form2.append("Token", temp);
 
-  const res2 = await fetch("https://ideas.edu.vn/login_otp.php?step=otp", {
+  const res2 = await fetch("https://open.domation.net/proxy/login_otp.php?step=otp", {
     method: "POST",
     body: form2,
   });
@@ -302,7 +302,7 @@ async function getToken(username, password, forceLogin = false) {
 }
 
 async function fetchLeadData(from, to, token) {
-  const url = `https://ideas.edu.vn/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
+  const url = `https://open.domation.net/proxy/proxy_misa.php?from_date=${from}&to_date=${to}&token=${token}`;
 
   try {
     const res = await fetch(url, { cache: "no-store" });
